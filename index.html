@@ -1,194 +1,1318 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// haedoesfitness — Google Sheets backend
-//
-// After replacing the code:
-//   1. Save (Ctrl+S)
-//   2. Click Deploy → Manage deployments → pencil icon (Edit)
-//   3. Set "Version" to "New version" → Deploy
-// Your existing URL keeps working with the new code.
-// ─────────────────────────────────────────────────────────────────────────────
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#FF4040">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="haedoesfitness">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>haedoesfitness</title>
+<style>
+:root {
+  --bg:#fff; --surface:#FAFAFA; --border:#F0F0F0; --border2:#E8E8E8;
+  --text:#111; --t2:#555; --t3:#BABABA; --accent:#FF4040; --green:#2D7A4A;
+  --font:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;min-height:100vh;}
 
-const SESSIONS_SHEET  = 'Sessions';
-const WEIGHTS_SHEET   = 'Weights';
-const TEMPLATES_SHEET = 'Templates';
-const PLAN_SHEET      = 'Plan';
+/* Nav */
+.nav{position:sticky;top:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--border);padding:0 36px;height:50px;display:flex;align-items:center;}
+.nav-name{font-size:13px;font-weight:600;color:var(--text);margin-right:28px;letter-spacing:-0.01em;}
+.nav-links{display:flex;flex:1;}
+.nl{height:50px;padding:0 14px;display:flex;align-items:center;font-size:12px;color:var(--t3);cursor:pointer;font-weight:400;position:relative;transition:color 0.15s;user-select:none;}
+.nl:hover{color:var(--t2);}
+.nl.active{color:var(--text);font-weight:500;}
+.nl.active::after{content:'';position:absolute;bottom:0;left:14px;right:14px;height:1.5px;background:var(--accent);}
+.sync-pill{font-size:10px;font-weight:600;padding:4px 10px;border-radius:99px;background:#F4F4F4;color:var(--t2);display:flex;align-items:center;gap:5px;cursor:pointer;border:none;font-family:inherit;}
+.sync-pill.synced{background:#EEF8F1;color:var(--green);}
+.sync-pill.syncing{background:#FFF7E5;color:#996600;}
+.sync-pill.error{background:#FFEEEE;color:var(--accent);}
+.sync-pill.offline{background:#F4F4F4;color:var(--t3);}
+.sync-dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
 
-// ── Entry points ─────────────────────────────────────────────────────────────
+/* Layout */
+.main{max-width:1080px;margin:0 auto;padding:32px 36px 72px;}
+.page{display:none;}
+.page.active{display:block;}
 
-function doGet(e) {
-  try { return readAll_(); } catch (err) { return json_({ error: String(err) }); }
+/* Greeting */
+.greet{font-size:24px;font-weight:600;color:var(--text);letter-spacing:-0.02em;margin-bottom:18px;}
+
+/* Stat row */
+.stats{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding-bottom:24px;border-bottom:1px solid var(--border);margin-bottom:24px;}
+.stat{display:flex;flex-direction:column;}
+.stat-lbl{font-size:9px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:5px;}
+.stat-val{font-size:14px;font-weight:600;color:var(--text);}
+.stat-div{width:1px;background:var(--border);align-self:stretch;}
+
+/* Today's plan detail card */
+.today-card{margin-bottom:24px;border-radius:12px;padding:16px 18px;display:flex;align-items:center;gap:14px;}
+.today-icon{font-size:28px;flex-shrink:0;}
+.today-body{flex:1;min-width:0;}
+.today-lbl{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:3px;}
+.today-name{font-size:15px;font-weight:700;color:var(--text);margin-bottom:5px;letter-spacing:-0.01em;}
+.today-exercises{font-size:11px;color:var(--t2);line-height:1.6;}
+.today-cta{font-size:11px;color:#fff;padding:8px 14px;border-radius:6px;border:none;font-weight:600;cursor:pointer;flex-shrink:0;font-family:inherit;}
+.today-card.done{background:#EEF8F1;border:1px solid #C9E6D2;}
+.today-card.done .today-lbl{color:var(--green);}
+.today-card.done .today-cta{background:var(--green);}
+.today-card.upper{background:#F4EEFF;border:1px solid #E5D5FF;}
+.today-card.upper .today-lbl{color:#7C50C8;} .today-card.upper .today-cta{background:#7C50C8;}
+.today-card.lower{background:#EEF2FF;border:1px solid #D5DDFF;}
+.today-card.lower .today-lbl{color:#5878C8;} .today-card.lower .today-cta{background:#5878C8;}
+.today-card.cardio{background:#E8F5EE;border:1px solid #C9E6D2;}
+.today-card.cardio .today-lbl{color:#208060;} .today-card.cardio .today-cta{background:#208060;}
+.today-card.core{background:#FFF1E6;border:1px solid #FFD9BC;}
+.today-card.core .today-lbl{color:#C06020;} .today-card.core .today-cta{background:#C06020;}
+.today-card.pilates{background:#FFEEF5;border:1px solid #FFD0E1;}
+.today-card.pilates .today-lbl{color:#B84080;} .today-card.pilates .today-cta{background:#B84080;}
+.today-card.running{background:#E8F5EC;border:1px solid #C9E0CF;}
+.today-card.running .today-lbl{color:#207A40;} .today-card.running .today-cta{background:#207A40;}
+.today-card.rest{background:#FAFAFA;border:1px solid var(--border);}
+.today-card.rest .today-lbl{color:var(--t3);}
+
+/* Streak banner */
+.streak-banner{background:linear-gradient(90deg,#FFF4ED 0%,#FFE0D6 100%);border:1px solid #FFD4B8;border-radius:14px;padding:18px 24px;display:flex;align-items:center;gap:18px;margin-bottom:28px;}
+.sb-fire{font-size:54px;line-height:1;}
+.sb-main{flex:1;min-width:0;}
+.sb-row{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.sb-num{font-size:42px;font-weight:800;color:#D6481E;letter-spacing:-0.03em;line-height:1;}
+.sb-lbl{font-size:14px;font-weight:600;color:#A8543E;}
+.sb-msg{font-size:11px;color:#A8543E;margin-top:3px;opacity:0.85;}
+.streak-banner.zero{background:linear-gradient(90deg,#F8F8F8 0%,#F0F0F0 100%);border-color:#E8E8E8;}
+.streak-banner.zero .sb-fire{filter:grayscale(0.85) opacity(0.55);}
+.streak-banner.zero .sb-num,.streak-banner.zero .sb-lbl,.streak-banner.zero .sb-msg{color:#999;}
+
+/* Dashboard columns */
+.dash-cols{display:grid;grid-template-columns:1fr 240px;gap:52px;align-items:start;}
+.sec-lbl{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
+.sec-act{font-size:10px;color:var(--accent);font-weight:600;text-transform:none;letter-spacing:0;cursor:pointer;border:none;background:none;font-family:inherit;}
+
+/* Week grid */
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:24px;}
+.wc{text-align:center;}
+.wc-lbl{font-size:9px;font-weight:500;color:var(--t3);margin-bottom:6px;}
+.wc-dot{width:26px;height:26px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;border:1px solid var(--border);color:var(--t3);}
+.wc-dot.done{background:var(--text);border-color:var(--text);color:#fff;font-size:11px;}
+.wc-dot.today{border:1.5px solid var(--accent);color:var(--accent);font-weight:700;}
+
+/* Session rows */
+.s-row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #F5F5F5;}
+.s-row:last-child{border-bottom:none;}
+.s-date{font-size:12px;font-weight:500;color:var(--t2);margin-bottom:3px;}
+.s-tags{display:flex;gap:0;font-size:10px;font-weight:500;flex-wrap:wrap;}
+.s-tag-sep{color:var(--t3);}
+.s-dur{font-size:11px;color:var(--t3);flex-shrink:0;margin-left:12px;}
+.s-notes{font-size:11px;color:var(--t3);line-height:1.65;margin-top:3px;}
+
+.tag-lower{color:#5878C8;} .tag-upper{color:#7C50C8;} .tag-cardio{color:#208060;}
+.tag-core{color:#C06020;} .tag-pilates{color:#B84080;} .tag-running{color:#207A40;}
+
+/* Past weeks */
+.past-week{overflow:hidden;}
+.past-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #F5F5F5;cursor:pointer;}
+.past-lbl{font-size:12px;color:var(--t2);}
+.past-cnt{font-size:11px;color:var(--t3);}
+.past-chev{font-size:11px;color:var(--t3);display:inline-block;transition:transform 0.2s;margin-left:8px;}
+.past-week.open .past-chev{transform:rotate(90deg);}
+.past-body{display:none;}
+.past-week.open .past-body{display:block;}
+
+/* ─── Workouts page ────────────────────────────────────────────────────────── */
+.pg-title{font-size:24px;font-weight:600;color:var(--text);letter-spacing:-0.02em;}
+.pg-sub{font-size:12px;color:var(--t3);margin-top:3px;}
+.pg-head{margin-bottom:28px;}
+
+/* Day plan rows */
+.day-row{display:flex;align-items:center;padding:11px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;gap:12px;transition:border-color 0.15s;}
+.day-row:hover{border-color:#DDD;}
+.day-row.today{border-color:var(--accent);background:#FFF8F8;}
+.day-row.done{background:#FAFAFA;}
+.day-status{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.s-done{background:var(--text);color:#fff;}
+.s-today{background:var(--accent);color:#fff;}
+.s-plan{border:1.5px solid var(--t3);}
+.s-missed{border:1.5px solid #D8D8D8;background:#FAFAFA;}
+.s-none{border:1px dashed #D8D8D8;}
+.day-name{font-size:11px;font-weight:600;color:var(--t2);width:58px;flex-shrink:0;}
+.day-plan{flex:1;display:flex;align-items:center;gap:8px;min-width:0;}
+.day-tag{font-size:10px;font-weight:700;padding:2px 9px;border-radius:99px;flex-shrink:0;}
+.dt-lower{background:#EEF2FF;color:#5878C8;} .dt-upper{background:#F4EEFF;color:#7C50C8;}
+.dt-cardio{background:#E8F5EE;color:#208060;} .dt-core{background:#FFF1E6;color:#C06020;}
+.dt-pilates{background:#FFEEF5;color:#B84080;} .dt-running{background:#E8F5EC;color:#207A40;}
+.dt-rest{background:#F0F0F0;color:#888;}
+.day-detail{font-size:11px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.day-detail b{color:var(--text);font-weight:600;}
+.day-empty{font-size:11px;color:#C8C8C8;font-style:italic;}
+.day-action{font-size:10px;color:var(--t3);font-weight:600;flex-shrink:0;padding:5px 11px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:#fff;font-family:inherit;}
+.day-action:hover{border-color:var(--t2);color:var(--t2);}
+.day-action.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.day-action.primary:hover{background:#E63838;}
+
+/* Templates */
+.tmpl-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin:0 -36px;padding-left:36px;padding-right:36px;scroll-padding-left:36px;}
+.tmpl{flex-shrink:0;width:148px;border:1px solid var(--border);border-radius:10px;padding:12px;background:#fff;cursor:pointer;transition:border-color 0.15s;}
+.tmpl:hover{border-color:var(--t2);}
+.tmpl-tag{font-size:8px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px;}
+.tmpl-name{font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;letter-spacing:-0.01em;}
+.tmpl-list{font-size:10px;color:var(--t2);line-height:1.6;min-height:54px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;}
+.tmpl-meta{font-size:9px;color:var(--t3);margin-top:7px;padding-top:7px;border-top:1px solid var(--border);}
+.tmpl-add{flex-shrink:0;width:148px;border:1px dashed #D8D8D8;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--t3);font-size:11px;font-weight:600;padding:14px;cursor:pointer;min-height:120px;background:#fff;}
+.tmpl-add:hover{border-color:var(--text);color:var(--text);}
+.tmpl-add .plus{font-size:24px;font-weight:300;margin-bottom:4px;}
+
+/* Log form area */
+.log-area{background:#FAFAFA;border-radius:10px;padding:18px;margin-bottom:24px;}
+.log-prefill{display:flex;align-items:center;gap:10px;background:#fff;padding:12px 14px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px;}
+.log-prefill-icon{font-size:18px;}
+.log-prefill-text{font-size:12px;color:var(--t2);flex:1;line-height:1.5;}
+.log-prefill-btn{font-size:11px;background:var(--text);color:#fff;padding:7px 13px;border-radius:6px;border:none;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0;}
+.log-divider{font-size:11px;color:var(--t3);text-align:center;padding:6px 0 10px;}
+
+/* Form fields */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.field{margin-bottom:14px;}
+.field-lbl{font-size:10px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.09em;margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;background:#fff;border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font);font-size:13px;padding:9px 12px;outline:none;transition:border-color 0.15s;-webkit-appearance:none;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--text);}
+.field textarea{height:90px;resize:vertical;line-height:1.6;}
+
+/* Pills (type selection) */
+.pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px;}
+.pill{padding:5px 13px;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border2);color:var(--t3);background:#fff;transition:all 0.12s;user-select:none;font-family:inherit;}
+.pill.sel-lower{border-color:#5878C8;color:#5878C8;background:#f0f3ff;}
+.pill.sel-upper{border-color:#7C50C8;color:#7C50C8;background:#f5f0ff;}
+.pill.sel-cardio{border-color:#208060;color:#208060;background:#eef8f4;}
+.pill.sel-core{border-color:#C06020;color:#C06020;background:#fff7f0;}
+.pill.sel-pilates{border-color:#B84080;color:#B84080;background:#fff0f6;}
+.pill.sel-running{border-color:#207A40;color:#207A40;background:#eef8f0;}
+
+/* Buttons */
+.btn{padding:9px 20px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s;display:inline-flex;align-items:center;gap:6px;border:none;font-family:inherit;}
+.btn-primary{background:var(--text);color:#fff;}
+.btn-primary:hover{background:#333;}
+.btn-ghost{background:transparent;color:var(--t2);border:1px solid var(--border2);}
+.btn-ghost:hover{border-color:var(--t2);}
+.btn-danger{background:transparent;color:var(--accent);border:1px solid var(--accent);}
+.btn-danger:hover{background:#FFEEEE;}
+.btn-sm{padding:6px 13px;font-size:11px;}
+
+/* Session list */
+.week-section{margin-bottom:28px;}
+.week-sec-hdr{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:10px;margin-bottom:2px;border-bottom:1px solid var(--border);}
+.week-sec-title{font-size:14px;font-weight:600;color:var(--text);letter-spacing:-0.01em;}
+.week-sec-cnt{font-size:11px;color:var(--t3);}
+.se{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #F5F5F5;}
+.se:last-child{border-bottom:none;}
+.se-left{flex:1;}
+.se-actions{display:flex;gap:3px;margin-left:12px;flex-shrink:0;}
+.icon-btn{background:none;border:none;cursor:pointer;color:var(--t3);padding:2px 5px;font-size:13px;border-radius:4px;transition:color 0.12s;font-family:inherit;}
+.icon-btn:hover{color:var(--t2);} .icon-btn.danger:hover{color:var(--accent);}
+
+/* Edit panel inline */
+.edit-panel{background:#FAFAFA;border:1px solid var(--border2);border-radius:8px;padding:14px;margin:8px 0;}
+.edit-row{display:flex;gap:8px;margin-top:10px;}
+
+/* Body weight */
+.bw-entry{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #F5F5F5;}
+.bw-entry:last-child{border-bottom:none;}
+.bw-date{font-size:11px;color:var(--t3);margin-bottom:2px;}
+.bw-val{font-size:20px;font-weight:300;color:var(--text);letter-spacing:-0.02em;}
+.bw-unit{font-size:12px;color:var(--t3);margin-left:2px;font-weight:400;}
+.bw-delta{font-size:11px;font-weight:500;margin-left:8px;}
+.d-up{color:var(--accent);} .d-dn{color:var(--green);}
+.bw-cols{display:grid;grid-template-columns:1fr 1fr;gap:52px;}
+.chart-wrap{position:relative;}
+.empty{text-align:center;padding:32px;color:var(--t3);font-size:12px;}
+
+/* Modals */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;display:none;align-items:flex-end;justify-content:center;padding:0;}
+.modal.show{display:flex;}
+.modal-content{background:#fff;border-radius:16px 16px 0 0;padding:24px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:14px;letter-spacing:-0.01em;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;}
+.modal-actions .btn-danger{margin-right:auto;}
+
+/* Template picker */
+.picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;max-height:300px;overflow-y:auto;padding:2px;}
+.picker-item{border:1.5px solid var(--border);border-radius:10px;padding:11px 12px;cursor:pointer;text-align:left;font-family:inherit;background:#fff;}
+.picker-item:hover{border-color:var(--text);}
+.picker-item.selected{border-color:var(--accent);background:#FFF8F8;}
+.picker-item-name{font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;}
+.picker-item-type{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+.picker-item-list{font-size:10px;color:var(--t3);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.picker-special{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.picker-special button{padding:10px;border:1.5px dashed var(--border2);border-radius:10px;background:#fff;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit;}
+.picker-special button:hover{border-color:var(--text);color:var(--text);}
+
+/* Setup screen */
+.setup-overlay{position:fixed;inset:0;background:#fff;z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;}
+.setup-box{max-width:520px;width:100%;}
+.setup-title{font-size:26px;font-weight:600;letter-spacing:-0.02em;margin-bottom:8px;}
+.setup-sub{font-size:13px;color:var(--t2);line-height:1.6;margin-bottom:24px;}
+.setup-input{width:100%;background:var(--bg);border:1.5px solid var(--border2);border-radius:6px;padding:11px 14px;font-size:13px;font-family:var(--font);color:var(--text);outline:none;margin-bottom:12px;}
+.setup-input:focus{border-color:var(--text);}
+.setup-err{font-size:12px;color:var(--accent);margin-top:6px;display:none;}
+.setup-err.show{display:block;}
+.setup-help{font-size:11px;color:var(--t3);margin-top:18px;line-height:1.7;}
+.setup-help code{background:#F5F5F5;padding:1px 5px;border-radius:3px;font-family:Menlo,monospace;font-size:10px;}
+.setup-skip{display:inline-block;margin-top:14px;font-size:11px;color:var(--t3);text-decoration:underline;cursor:pointer;background:none;border:none;font-family:inherit;}
+
+@media(max-width:768px){
+  .nav,.main{padding-left:18px;padding-right:18px;}
+  .stats{gap:16px;}
+  .stat-div{display:none;}
+  .dash-cols,.form-grid,.bw-cols{grid-template-columns:1fr;gap:28px;}
+  .day-row{flex-wrap:wrap;}
+  .day-name{width:auto;}
+  .tmpl-row{margin:0 -18px;padding-left:18px;padding-right:18px;}
+  .modal{align-items:flex-end;}
+  .modal-content{border-radius:16px 16px 0 0;}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Setup overlay ─────────────────────────────────────────────────────── -->
+<div class="setup-overlay" id="setup" style="display:none;">
+  <div class="setup-box">
+    <div class="setup-title">Welcome 👋</div>
+    <div class="setup-sub">Paste your Google Apps Script Web App URL to connect to your spreadsheet.</div>
+    <input type="text" id="setup-url" class="setup-input" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="setup-err" id="setup-err"></div>
+    <button class="btn btn-primary" onclick="connectSheet()" style="width:100%;justify-content:center;">Connect to Google Sheets</button>
+    <button class="setup-skip" onclick="skipSetup()">Skip — use this device only</button>
+    <div class="setup-help">The URL ends in <code>/exec</code>. Lost it? Go to your spreadsheet → Extensions → Apps Script → Deploy → Manage deployments.</div>
+  </div>
+</div>
+
+<!-- ── Nav ──────────────────────────────────────────────────────────────── -->
+<nav class="nav" id="nav" style="display:none;">
+  <span class="nav-name">haedoesfitness</span>
+  <div class="nav-links">
+    <div class="nl active" onclick="goTo('dashboard',this)">Dashboard</div>
+    <div class="nl" onclick="goTo('workouts',this)">Workouts</div>
+    <div class="nl" onclick="goTo('weight',this)">Weight</div>
+  </div>
+  <button class="sync-pill" id="sync-pill" onclick="openSettings()"><span class="sync-dot"></span><span id="sync-text">Loading…</span></button>
+</nav>
+
+<main class="main" id="main" style="display:none;">
+
+  <!-- ── DASHBOARD ─────────────────────────────────────────────────────── -->
+  <div class="page active" id="page-dashboard">
+    <div class="greet" id="dash-greeting">Good morning.</div>
+    <div class="stats" id="dash-stats"></div>
+    <div id="dash-today-card"></div>
+    <div id="dash-streak"></div>
+    <div class="dash-cols">
+      <div id="dash-week"></div>
+      <div id="dash-right"></div>
+    </div>
+  </div>
+
+  <!-- ── WORKOUTS ──────────────────────────────────────────────────────── -->
+  <div class="page" id="page-workouts">
+    <div class="pg-head">
+      <div class="pg-title">Workouts</div>
+      <div class="pg-sub">Plan your week, run through templates, log what you did</div>
+    </div>
+
+    <!-- Week plan -->
+    <div class="sec-lbl">
+      <span id="wk-plan-label">This week's plan</span>
+      <button class="sec-act" onclick="clearWeekPlan()">Clear week</button>
+    </div>
+    <div id="week-plan"></div>
+
+    <!-- Templates -->
+    <div class="sec-lbl" style="margin-top:32px;">
+      <span>My templates — tap one when planning a day</span>
+    </div>
+    <div class="tmpl-row" id="tmpl-row"></div>
+
+    <!-- Log form -->
+    <div class="sec-lbl" style="margin-top:32px;">
+      <span>Log a workout</span>
+    </div>
+    <div class="log-area" id="log-area"></div>
+
+    <!-- Recent sessions -->
+    <div class="sec-lbl" style="margin-top:32px;">
+      <span>Recent sessions</span>
+    </div>
+    <div id="session-list"></div>
+  </div>
+
+  <!-- ── WEIGHT ────────────────────────────────────────────────────────── -->
+  <div class="page" id="page-weight">
+    <div class="pg-head">
+      <div class="pg-title">Weight</div>
+      <div class="pg-sub">Track your progress over time</div>
+    </div>
+    <div class="bw-cols" style="margin-bottom:40px;">
+      <div>
+        <div class="sec-lbl"><span>Log weight</span></div>
+        <div class="form-grid">
+          <div class="field"><div class="field-lbl">Date</div><input type="date" id="bw-date"></div>
+          <div class="field"><div class="field-lbl">Weight (kg)</div><input type="number" id="bw-val" placeholder="67.5" step="0.1" min="20"></div>
+        </div>
+        <button class="btn btn-primary" onclick="addWeight()">+ Log weight</button>
+      </div>
+      <div>
+        <div class="sec-lbl"><span>History</span></div>
+        <div id="bw-list"></div>
+      </div>
+    </div>
+    <div class="sec-lbl"><span>Trend</span></div>
+    <div class="chart-wrap" style="height:200px;"><canvas id="bwChart"></canvas></div>
+  </div>
+
+</main>
+
+<!-- ── Settings modal ───────────────────────────────────────────────────── -->
+<div class="modal" id="settings-modal">
+  <div class="modal-content">
+    <div class="modal-title">Google Sheets connection</div>
+    <div class="field"><div class="field-lbl">Web App URL</div><input type="text" id="settings-url" placeholder="https://script.google.com/macros/s/.../exec"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('settings-modal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveSettings()">Save</button>
+    </div>
+    <div style="font-size:11px;color:var(--t3);margin-top:16px;line-height:1.6;">Leave blank and save to disconnect (local data preserved).</div>
+  </div>
+</div>
+
+<!-- ── Template editor modal ────────────────────────────────────────────── -->
+<div class="modal" id="tmpl-modal">
+  <div class="modal-content">
+    <div class="modal-title" id="tmpl-modal-title">New template</div>
+    <div class="form-grid">
+      <div class="field"><div class="field-lbl">Name</div><input type="text" id="tmpl-name" placeholder="Lower A"></div>
+      <div class="field"><div class="field-lbl">Duration (min)</div><input type="number" id="tmpl-duration" placeholder="60" min="1"></div>
+    </div>
+    <div class="field">
+      <div class="field-lbl">Type</div>
+      <div class="pills" id="tmpl-type-pills">
+        <span class="pill" data-type="lower" onclick="pickTmplType(this)">Lower</span>
+        <span class="pill" data-type="upper" onclick="pickTmplType(this)">Upper</span>
+        <span class="pill" data-type="cardio" onclick="pickTmplType(this)">Cardio</span>
+        <span class="pill" data-type="core" onclick="pickTmplType(this)">Core</span>
+        <span class="pill" data-type="pilates" onclick="pickTmplType(this)">Pilates</span>
+        <span class="pill" data-type="running" onclick="pickTmplType(this)">Running</span>
+      </div>
+    </div>
+    <div class="field" style="margin-top:14px;"><div class="field-lbl">Exercises — one per line</div><textarea id="tmpl-exercises" placeholder="Squats 4×8&#10;Hip thrusts 3×12&#10;Leg press 3×10"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" id="tmpl-delete-btn" onclick="deleteTemplateNow()" style="display:none;">Delete</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('tmpl-modal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveTemplate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Plan editor modal (assigns a workout to a day) ───────────────────── -->
+<div class="modal" id="plan-modal">
+  <div class="modal-content">
+    <div class="modal-title" id="plan-modal-title">Plan a workout</div>
+    <div class="picker-special">
+      <button onclick="setPlanRest()">😌 Rest day</button>
+      <button onclick="openCustomPlan()">✎ Custom workout</button>
+    </div>
+    <div style="font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:0.1em;font-weight:600;margin-bottom:8px;">Or pick a template</div>
+    <div class="picker-grid" id="picker-grid"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" id="plan-clear-btn" onclick="clearPlanNow()" style="display:none;">Clear this day</button>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('plan-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Custom plan modal ────────────────────────────────────────────────── -->
+<div class="modal" id="custom-plan-modal">
+  <div class="modal-content">
+    <div class="modal-title">Custom plan for this day</div>
+    <div class="form-grid">
+      <div class="field"><div class="field-lbl">Name</div><input type="text" id="cp-name" placeholder="Custom workout"></div>
+      <div class="field"><div class="field-lbl">Duration (min)</div><input type="number" id="cp-duration" placeholder="60" min="1"></div>
+    </div>
+    <div class="field">
+      <div class="field-lbl">Type</div>
+      <div class="pills" id="cp-type-pills">
+        <span class="pill" data-type="lower" onclick="pickCpType(this)">Lower</span>
+        <span class="pill" data-type="upper" onclick="pickCpType(this)">Upper</span>
+        <span class="pill" data-type="cardio" onclick="pickCpType(this)">Cardio</span>
+        <span class="pill" data-type="core" onclick="pickCpType(this)">Core</span>
+        <span class="pill" data-type="pilates" onclick="pickCpType(this)">Pilates</span>
+        <span class="pill" data-type="running" onclick="pickCpType(this)">Running</span>
+      </div>
+    </div>
+    <div class="field" style="margin-top:14px;"><div class="field-lbl">Exercises</div><textarea id="cp-exercises" placeholder="What's the plan?"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('custom-plan-modal')">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveCustomPlan()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let sessions  = JSON.parse(localStorage.getItem('ft_sessions')  || '[]');
+let weights   = JSON.parse(localStorage.getItem('ft_weights')   || '[]');
+let templates = JSON.parse(localStorage.getItem('ft_templates') || '[]');
+let plan      = JSON.parse(localStorage.getItem('ft_plan')      || '[]');
+let SHEET_URL = localStorage.getItem('ft_sheet_url') || '';
+let selTypes  = new Set();
+let editSessionId = null;
+let editTypes = new Set();
+let editingTmplId = null;
+let editingTmplType = null;
+let editingPlanDate = null;
+let cpType = null;
+let syncState = 'offline';
+let pendingOps = 0;
+let logPrefill = null; // template object if pre-filling from a plan
+
+const TYPES = ['lower','upper','cardio','core','pilates','running'];
+const TYPE_NAMES = { lower:'Lower', upper:'Upper', cardio:'Cardio', core:'Core', pilates:'Pilates', running:'Running' };
+
+function saveLocal() {
+  localStorage.setItem('ft_sessions',  JSON.stringify(sessions));
+  localStorage.setItem('ft_weights',   JSON.stringify(weights));
+  localStorage.setItem('ft_templates', JSON.stringify(templates));
+  localStorage.setItem('ft_plan',      JSON.stringify(plan));
 }
 
-function doPost(e) {
+// ── Sync layer ───────────────────────────────────────────────────────────────
+function setSyncState(state, msg) {
+  syncState = state;
+  const pill = document.getElementById('sync-pill');
+  const txt  = document.getElementById('sync-text');
+  pill.className = 'sync-pill ' + state;
+  const labels = { offline:'Local only', syncing:'Syncing…', synced:'Synced', error:'Sync error' };
+  txt.textContent = msg || labels[state];
+}
+
+async function loadFromSheet() {
+  if (!SHEET_URL) { setSyncState('offline'); return; }
+  setSyncState('syncing', 'Loading…');
   try {
-    const data = JSON.parse(e.postData.contents);
-    switch (data.action) {
-      case 'addSession':     return addSession_(data.session);
-      case 'updateSession':  return updateSession_(data.session);
-      case 'deleteSession':  return deleteSession_(data.id);
-      case 'addWeight':      return addWeight_(data.weight);
-      case 'deleteWeight':   return deleteWeight_(data.date);
-      case 'addTemplate':    return addTemplate_(data.template);
-      case 'updateTemplate': return updateTemplate_(data.template);
-      case 'deleteTemplate': return deleteTemplate_(data.id);
-      case 'setPlan':        return setPlan_(data.plan);
-      case 'clearPlan':      return clearPlan_(data.date);
-      default:               return json_({ error: 'Unknown action: ' + data.action });
+    const res = await fetch(SHEET_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    sessions  = (data.sessions  || []).sort((a,b) => b.date.localeCompare(a.date));
+    weights   = (data.weights   || []).sort((a,b) => a.date > b.date ? 1 : -1);
+    templates = (data.templates || []);
+    plan      = (data.plan      || []);
+    saveLocal();
+    setSyncState('synced');
+    renderAll();
+  } catch (err) {
+    console.error('Load failed:', err);
+    setSyncState('error', "Couldn't load");
+  }
+}
+
+async function pushToSheet(action, payload) {
+  if (!SHEET_URL) return;
+  pendingOps++;
+  setSyncState('syncing');
+  try {
+    await fetch(SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, ...payload })
+    });
+    pendingOps--;
+    if (pendingOps === 0) setSyncState('synced');
+  } catch (err) {
+    pendingOps--;
+    console.error('Sync failed:', err);
+    setSyncState('error');
+  }
+}
+
+// ── Setup / settings ────────────────────────────────────────────────────────
+function showSetup() {
+  document.getElementById('setup').style.display = 'flex';
+  document.getElementById('nav').style.display = 'none';
+  document.getElementById('main').style.display = 'none';
+}
+function hideSetup() {
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('nav').style.display = 'flex';
+  document.getElementById('main').style.display = 'block';
+}
+function connectSheet() {
+  const url = document.getElementById('setup-url').value.trim();
+  const err = document.getElementById('setup-err');
+  if (!url) { err.textContent = 'Please paste the URL.'; err.classList.add('show'); return; }
+  if (!url.includes('script.google.com')) { err.textContent = "That doesn't look like an Apps Script URL."; err.classList.add('show'); return; }
+  if (!url.endsWith('/exec')) { err.textContent = 'The URL should end with /exec'; err.classList.add('show'); return; }
+  SHEET_URL = url;
+  localStorage.setItem('ft_sheet_url', url);
+  hideSetup();
+  loadFromSheet();
+}
+function skipSetup() { hideSetup(); setSyncState('offline'); renderAll(); }
+function openSettings() {
+  document.getElementById('settings-url').value = SHEET_URL;
+  openModal('settings-modal');
+}
+function saveSettings() {
+  const url = document.getElementById('settings-url').value.trim();
+  SHEET_URL = url;
+  localStorage.setItem('ft_sheet_url', url);
+  closeModal('settings-modal');
+  if (url) loadFromSheet(); else setSyncState('offline');
+}
+
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ── Date helpers ─────────────────────────────────────────────────────────────
+const pad   = n => String(n).padStart(2,'0');
+const ldStr = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today = () => ldStr(new Date());
+
+function mondayOf(ds) {
+  const [y,m,d] = ds.split('-').map(Number);
+  const dt = new Date(y,m-1,d);
+  dt.setDate(dt.getDate() - (dt.getDay()===0 ? 6 : dt.getDay()-1));
+  return ldStr(dt);
+}
+function weekLabel(ms) {
+  const [y,m,d] = ms.split('-').map(Number);
+  const a = new Date(y,m-1,d), b = new Date(y,m-1,d+6);
+  const ma = a.toLocaleDateString('en-GB',{month:'short'});
+  const mb = b.toLocaleDateString('en-GB',{month:'short'});
+  return ma===mb ? `${a.getDate()}–${b.getDate()} ${ma}` : `${a.getDate()} ${ma} – ${b.getDate()} ${mb}`;
+}
+function fmtDate(ds) { const [y,m,d] = ds.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
+function fmtShort(ds) { const [y,m,d] = ds.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('en-GB',{day:'numeric',month:'short'}); }
+function fmtFull(ds) { const [y,m,d] = ds.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); }
+
+const cap   = s => s ? s[0].toUpperCase()+s.slice(1) : '';
+const byWk  = arr => arr.reduce((g,s)=>{ const k=mondayOf(s.date); return {...g,[k]:[...(g[k]||[]),s]}; },{});
+const esc   = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+function tagsHtml(types) {
+  return types.map((t,i) =>
+    `<span class="tag-${t}">${TYPE_NAMES[t]||cap(t)}</span>${i < types.length-1 ? '<span class="s-tag-sep"> · </span>' : ''}`
+  ).join('');
+}
+
+function calcStreak() {
+  if (!sessions.length) return 0;
+  const dates = new Set(sessions.map(s => s.date));
+  const cursor = new Date();
+  if (!dates.has(ldStr(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+    if (!dates.has(ldStr(cursor))) return 0;
+  }
+  let n = 0;
+  while (dates.has(ldStr(cursor))) { n++; cursor.setDate(cursor.getDate() - 1); }
+  return n;
+}
+
+function getPlanFor(date) { return plan.find(p => p.date === date); }
+function hasSessionOn(date) { return sessions.some(s => s.date === date); }
+function lastWorkout() {
+  if (!sessions.length) return null;
+  return [...sessions].sort((a,b) => b.date.localeCompare(a.date))[0];
+}
+
+// ── Nav ──────────────────────────────────────────────────────────────────────
+function goTo(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nl').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  el.classList.add('active');
+  if (id === 'dashboard') renderDashboard();
+  if (id === 'workouts')  renderWorkouts();
+  if (id === 'weight')    { renderBwList(); renderBwChart(); }
+}
+
+// ── Sessions CRUD ────────────────────────────────────────────────────────────
+function toggleType(el) {
+  const t = el.dataset.type;
+  if (selTypes.has(t)) { selTypes.delete(t); el.className = 'pill'; }
+  else { selTypes.add(t); el.className = `pill sel-${t}`; }
+}
+function toggleEditType(el) {
+  const t = el.dataset.type;
+  if (editTypes.has(t)) { editTypes.delete(t); el.className = 'pill'; }
+  else { editTypes.add(t); el.className = `pill sel-${t}`; }
+}
+
+function addSession() {
+  const date  = document.getElementById('s-date').value;
+  const dur   = parseInt(document.getElementById('s-dur').value) || 0;
+  const notes = document.getElementById('s-notes').value.trim();
+  const types = [...selTypes];
+  if (!date)         return alert('Pick a date.');
+  if (!types.length) return alert('Select at least one type.');
+  const session = { id: Date.now(), date, duration: dur, types, notes };
+  sessions.unshift(session);
+  sessions.sort((a,b) => b.date.localeCompare(a.date));
+  saveLocal();
+  pushToSheet('addSession', { session });
+  logPrefill = null;
+  renderWorkouts();
+  renderDashboard();
+}
+
+function delSession(id) {
+  if (!confirm('Delete this session?')) return;
+  sessions = sessions.filter(s => s.id !== id);
+  saveLocal();
+  pushToSheet('deleteSession', { id });
+  renderWorkouts();
+  renderDashboard();
+}
+
+function startEdit(id) {
+  if (editSessionId === id) { editSessionId = null; renderWorkouts(); return; }
+  editSessionId = id;
+  renderWorkouts();
+}
+function cancelEdit() { editSessionId = null; renderWorkouts(); }
+
+function saveEdit(id) {
+  const date  = document.getElementById(`ee-date-${id}`).value;
+  const dur   = parseInt(document.getElementById(`ee-dur-${id}`).value) || 0;
+  const notes = document.getElementById(`ee-notes-${id}`).value.trim();
+  const types = [...editTypes];
+  if (!date || !types.length) return alert('Fill required fields.');
+  const i = sessions.findIndex(s => s.id === id);
+  if (i >= 0) {
+    sessions[i] = {...sessions[i], date, duration: dur, types, notes};
+    pushToSheet('updateSession', { session: sessions[i] });
+  }
+  sessions.sort((a,b) => b.date.localeCompare(a.date));
+  saveLocal();
+  editSessionId = null; editTypes.clear();
+  renderWorkouts();
+  renderDashboard();
+}
+
+// ── Templates CRUD ───────────────────────────────────────────────────────────
+function openTemplateEditor(id) {
+  editingTmplId = id;
+  const t = id ? templates.find(t => t.id === id) : null;
+  document.getElementById('tmpl-modal-title').textContent = t ? 'Edit template' : 'New template';
+  document.getElementById('tmpl-name').value     = t ? t.name : '';
+  document.getElementById('tmpl-duration').value = t && t.duration ? t.duration : '';
+  document.getElementById('tmpl-exercises').value = t ? t.exercises : '';
+  editingTmplType = t ? t.type : null;
+  document.querySelectorAll('#tmpl-type-pills .pill').forEach(p => {
+    p.className = (p.dataset.type === editingTmplType) ? `pill sel-${p.dataset.type}` : 'pill';
+  });
+  document.getElementById('tmpl-delete-btn').style.display = t ? 'inline-flex' : 'none';
+  openModal('tmpl-modal');
+}
+function pickTmplType(el) {
+  editingTmplType = el.dataset.type;
+  document.querySelectorAll('#tmpl-type-pills .pill').forEach(p => {
+    p.className = (p.dataset.type === editingTmplType) ? `pill sel-${p.dataset.type}` : 'pill';
+  });
+}
+function saveTemplate() {
+  const name = document.getElementById('tmpl-name').value.trim();
+  const dur  = parseInt(document.getElementById('tmpl-duration').value) || 0;
+  const ex   = document.getElementById('tmpl-exercises').value.trim();
+  if (!name)            return alert('Give your template a name.');
+  if (!editingTmplType) return alert('Pick a workout type.');
+  if (editingTmplId) {
+    const i = templates.findIndex(t => t.id === editingTmplId);
+    if (i >= 0) {
+      templates[i] = { ...templates[i], name, type: editingTmplType, exercises: ex, duration: dur };
+      pushToSheet('updateTemplate', { template: templates[i] });
     }
-  } catch (err) { return json_({ error: String(err) }); }
+  } else {
+    const tmpl = { id: Date.now(), name, type: editingTmplType, exercises: ex, duration: dur };
+    templates.push(tmpl);
+    pushToSheet('addTemplate', { template: tmpl });
+  }
+  saveLocal();
+  closeModal('tmpl-modal');
+  renderWorkouts();
+  renderDashboard();
+}
+function deleteTemplateNow() {
+  if (!editingTmplId) return;
+  if (!confirm('Delete this template? Days planned with it will keep their snapshot.')) return;
+  templates = templates.filter(t => t.id !== editingTmplId);
+  pushToSheet('deleteTemplate', { id: editingTmplId });
+  saveLocal();
+  closeModal('tmpl-modal');
+  renderWorkouts();
+  renderDashboard();
 }
 
-function json_(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
-function sheet_(n) { return SpreadsheetApp.getActiveSpreadsheet().getSheetByName(n); }
-
-function dateStr_(d) {
-  if (!d) return '';
-  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
-  const dt = (d instanceof Date) ? d : new Date(d);
-  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+// ── Plan CRUD ────────────────────────────────────────────────────────────────
+function openPlanEditor(date) {
+  editingPlanDate = date;
+  const existing = getPlanFor(date);
+  const d = new Date(date + 'T00:00:00');
+  document.getElementById('plan-modal-title').textContent =
+    `Plan for ${d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}`;
+  document.getElementById('plan-clear-btn').style.display = existing ? 'inline-flex' : 'none';
+  renderPickerGrid();
+  openModal('plan-modal');
+}
+function renderPickerGrid() {
+  const grid = document.getElementById('picker-grid');
+  if (!templates.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--t3);font-size:12px;padding:20px;">No templates yet. Add some below first.</div>';
+    return;
+  }
+  grid.innerHTML = templates.map(t => `
+    <button class="picker-item" onclick="setPlanFromTemplate(${t.id})">
+      <div class="picker-item-type tag-${t.type}">${TYPE_NAMES[t.type]||cap(t.type)}</div>
+      <div class="picker-item-name">${esc(t.name)}</div>
+      <div class="picker-item-list">${esc(t.exercises || 'No exercises listed').replace(/\n/g,' · ')}</div>
+    </button>
+  `).join('');
+}
+function setPlanFromTemplate(tid) {
+  const t = templates.find(t => t.id === tid);
+  if (!t) return;
+  const p = { date: editingPlanDate, name: t.name, type: t.type, exercises: t.exercises, duration: t.duration || 0 };
+  upsertPlan(p);
+  closeModal('plan-modal');
+}
+function setPlanRest() {
+  const p = { date: editingPlanDate, name: 'Rest day', type: 'rest', exercises: '', duration: 0 };
+  upsertPlan(p);
+  closeModal('plan-modal');
+}
+function openCustomPlan() {
+  closeModal('plan-modal');
+  document.getElementById('cp-name').value = '';
+  document.getElementById('cp-duration').value = '';
+  document.getElementById('cp-exercises').value = '';
+  cpType = null;
+  document.querySelectorAll('#cp-type-pills .pill').forEach(p => p.className = 'pill');
+  openModal('custom-plan-modal');
+}
+function pickCpType(el) {
+  cpType = el.dataset.type;
+  document.querySelectorAll('#cp-type-pills .pill').forEach(p => {
+    p.className = (p.dataset.type === cpType) ? `pill sel-${p.dataset.type}` : 'pill';
+  });
+}
+function saveCustomPlan() {
+  const name = document.getElementById('cp-name').value.trim();
+  const dur  = parseInt(document.getElementById('cp-duration').value) || 0;
+  const ex   = document.getElementById('cp-exercises').value.trim();
+  if (!name) return alert("Give it a name.");
+  if (!cpType) return alert('Pick a type.');
+  const p = { date: editingPlanDate, name, type: cpType, exercises: ex, duration: dur };
+  upsertPlan(p);
+  closeModal('custom-plan-modal');
+}
+function upsertPlan(p) {
+  const i = plan.findIndex(x => x.date === p.date);
+  if (i >= 0) plan[i] = p; else plan.push(p);
+  saveLocal();
+  pushToSheet('setPlan', { plan: p });
+  renderWorkouts();
+  renderDashboard();
+}
+function clearPlanNow() {
+  if (!editingPlanDate) return;
+  plan = plan.filter(p => p.date !== editingPlanDate);
+  saveLocal();
+  pushToSheet('clearPlan', { date: editingPlanDate });
+  closeModal('plan-modal');
+  renderWorkouts();
+  renderDashboard();
+}
+function clearWeekPlan() {
+  if (!confirm('Clear this week\'s plan? Templates and sessions remain.')) return;
+  const mon = mondayOf(today());
+  const [y,m,d] = mon.split('-').map(Number);
+  const dates = [];
+  for (let i = 0; i < 7; i++) dates.push(ldStr(new Date(y,m-1,d+i)));
+  dates.forEach(date => {
+    if (getPlanFor(date)) pushToSheet('clearPlan', { date });
+  });
+  plan = plan.filter(p => !dates.includes(p.date));
+  saveLocal();
+  renderWorkouts();
+  renderDashboard();
 }
 
-// ── Read all ─────────────────────────────────────────────────────────────────
+// ── Smart pre-fill from today's plan ─────────────────────────────────────────
+function logTodaysPlan() {
+  const p = getPlanFor(today());
+  if (!p || p.type === 'rest') return;
+  logPrefill = p;
+  renderWorkouts();
+  goTo('workouts', document.querySelectorAll('.nl')[1]);
+  // Scroll to log area
+  setTimeout(() => {
+    document.getElementById('log-area').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
+}
 
-function readAll_() {
-  const sessions = [], weights = [], templates = [], plan = [];
+// ── Render dashboard ─────────────────────────────────────────────────────────
+function renderDashboard() {
+  const now = new Date(), h = now.getHours();
+  document.getElementById('dash-greeting').textContent =
+    h<12 ? 'Good morning.' : h<18 ? 'Good afternoon.' : 'Good evening.';
 
-  const s = sheet_(SESSIONS_SHEET);
-  if (s && s.getLastRow() > 1) {
-    s.getRange(2, 1, s.getLastRow() - 1, 5).getValues().forEach(r => {
-      if (r[0] !== '' && r[0] !== null) sessions.push({
-        id: Number(r[0]) || r[0],
-        date: dateStr_(r[1]),
-        duration: Number(r[2]) || 0,
-        types: r[3] ? String(r[3]).split(',').map(x => x.trim()).filter(Boolean) : [],
-        notes: r[4] ? String(r[4]) : ''
-      });
-    });
+  // Stat row
+  const last = lastWorkout();
+  const todaysPlan = getPlanFor(today());
+  const streak = calcStreak();
+  const dateStr = now.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+
+  let stats = `
+    <div class="stat"><div class="stat-lbl">Date</div><div class="stat-val">${dateStr}</div></div>
+    <div class="stat-div"></div>
+    <div class="stat"><div class="stat-lbl">Last workout</div><div class="stat-val ${last?'tag-'+last.types[0]:''}">${last ? (TYPE_NAMES[last.types[0]]||cap(last.types[0])) : '—'}</div></div>
+    <div class="stat-div"></div>`;
+
+  if (todaysPlan) {
+    if (todaysPlan.type === 'rest') {
+      stats += `<div class="stat"><div class="stat-lbl">Today</div><div class="stat-val" style="color:var(--t3);">😌 Rest</div></div>`;
+    } else {
+      const done = hasSessionOn(today());
+      stats += `<div class="stat"><div class="stat-lbl">Today's plan</div><div class="stat-val tag-${todaysPlan.type}">${done?'✓ ':'⚡ '}${esc(todaysPlan.name)}</div></div>`;
+    }
+  } else {
+    stats += `<div class="stat"><div class="stat-lbl">Today's plan</div><div class="stat-val" style="color:var(--t3);">— none</div></div>`;
   }
 
-  const w = sheet_(WEIGHTS_SHEET);
-  if (w && w.getLastRow() > 1) {
-    w.getRange(2, 1, w.getLastRow() - 1, 2).getValues().forEach(r => {
-      if (r[0] !== '' && r[0] !== null) weights.push({ date: dateStr_(r[0]), val: Number(r[1]) || 0 });
-    });
+  stats += `<div class="stat-div"></div>
+    <div class="stat"><div class="stat-lbl">Streak</div><div class="stat-val" style="color:#D6481E;">🔥 ${streak} day${streak===1?'':'s'}</div></div>`;
+
+  document.getElementById('dash-stats').innerHTML = stats;
+
+  // Today's plan detail card
+  const todayCard = document.getElementById('dash-today-card');
+  if (todaysPlan) {
+    const done = hasSessionOn(today());
+    if (todaysPlan.type === 'rest') {
+      todayCard.innerHTML = `
+        <div class="today-card rest">
+          <div class="today-icon">😌</div>
+          <div class="today-body">
+            <div class="today-lbl">Today's plan</div>
+            <div class="today-name">Rest day</div>
+            <div class="today-exercises">Take a break — recover well.</div>
+          </div>
+        </div>`;
+    } else {
+      const exercises = todaysPlan.exercises ? todaysPlan.exercises.split('\n').filter(Boolean).join(' · ') : 'No exercises listed';
+      todayCard.innerHTML = `
+        <div class="today-card ${done?'done':todaysPlan.type}">
+          <div class="today-icon">${done?'✓':'⚡'}</div>
+          <div class="today-body">
+            <div class="today-lbl">${done?'Today — done':"Today's plan"}</div>
+            <div class="today-name">${esc(todaysPlan.name)}</div>
+            <div class="today-exercises">${esc(exercises)}</div>
+          </div>
+          ${done?'':`<button class="today-cta" onclick="logTodaysPlan()">Log it →</button>`}
+        </div>`;
+    }
+  } else {
+    todayCard.innerHTML = '';
   }
 
-  const t = sheet_(TEMPLATES_SHEET);
-  if (t && t.getLastRow() > 1) {
-    t.getRange(2, 1, t.getLastRow() - 1, 5).getValues().forEach(r => {
-      if (r[0] !== '' && r[0] !== null) templates.push({
-        id: Number(r[0]) || r[0],
-        name: String(r[1] || ''),
-        type: String(r[2] || '').toLowerCase(),
-        exercises: String(r[3] || ''),
-        duration: Number(r[4]) || 0
-      });
-    });
+  // Streak banner
+  const msg = streak === 0 ? "Let's start a streak!" :
+              streak < 3  ? "Keep it going! 💪" :
+              streak < 7  ? "Looking strong! 🔥" :
+              streak < 14 ? "On fire! 🔥" :
+                            "Unstoppable! ⚡";
+  document.getElementById('dash-streak').innerHTML = `
+    <div class="streak-banner ${streak===0?'zero':''}">
+      <span class="sb-fire">🔥</span>
+      <div class="sb-main">
+        <div class="sb-row">
+          <span class="sb-num">${streak}</span>
+          <span class="sb-lbl">day${streak===1?'':'s'} streak</span>
+        </div>
+        <div class="sb-msg">${msg}</div>
+      </div>
+    </div>`;
+
+  // Week column
+  const thisMon = mondayOf(today());
+  const [y,m,d] = thisMon.split('-').map(Number);
+  const t = today();
+  const thisWeek = sessions.filter(s => mondayOf(s.date) === thisMon).sort((a,b) => b.date.localeCompare(a.date));
+
+  let wHtml = `<div class="sec-lbl"><span>This week — ${weekLabel(thisMon)}</span></div>
+    <div class="week-grid">
+      ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((lb,i) => {
+        const dt = new Date(y,m-1,d+i), ds = ldStr(dt);
+        const hit = hasSessionOn(ds), isT = ds === t;
+        return `<div class="wc">
+          <div class="wc-lbl">${lb}</div>
+          <div class="wc-dot ${hit?'done':isT?'today':''}">${hit ? '✓' : dt.getDate()}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+
+  wHtml += thisWeek.length ? thisWeek.map(s => {
+    const lines = s.notes ? s.notes.split('\n').filter(Boolean) : [];
+    return `<div class="s-row">
+      <div>
+        <div class="s-date">${fmtDate(s.date)}</div>
+        <div class="s-tags">${tagsHtml(s.types)}</div>
+        ${lines.length ? `<div class="s-notes">${lines.map(l=>`<div>${esc(l)}</div>`).join('')}</div>` : ''}
+      </div>
+      ${s.duration ? `<div class="s-dur">${s.duration} min</div>` : ''}
+    </div>`;
+  }).join('') : '<div style="color:var(--t3);font-size:12px;padding:12px 0 4px;">No sessions this week yet.</div>';
+
+  document.getElementById('dash-week').innerHTML = wHtml;
+
+  // Right column: past weeks + recent weight
+  const groups = byWk(sessions);
+  const pastMons = Object.keys(groups).filter(m => m !== thisMon).sort((a,b) => b.localeCompare(a));
+  let rHtml = '<div style="margin-bottom:32px;"><div class="sec-lbl"><span>Past weeks</span></div>';
+  if (!pastMons.length) {
+    rHtml += '<div style="color:var(--t3);font-size:12px;">Previous weeks will appear here.</div>';
+  } else {
+    rHtml += pastMons.map(mon => {
+      const ws = (groups[mon]||[]).sort((a,b) => b.date.localeCompare(a.date));
+      const sid = 'pw' + mon.replace(/-/g,'');
+      return `<div class="past-week" id="${sid}">
+        <div class="past-row" onclick="document.getElementById('${sid}').classList.toggle('open')">
+          <span class="past-lbl">${weekLabel(mon)}</span>
+          <div style="display:flex;align-items:center;"><span class="past-cnt">${ws.length}</span><span class="past-chev">›</span></div>
+        </div>
+        <div class="past-body">
+          ${ws.map(s => `<div class="s-row">
+            <div>
+              <div class="s-date">${fmtDate(s.date)}</div>
+              <div class="s-tags">${tagsHtml(s.types)}</div>
+            </div>
+            ${s.duration ? `<div class="s-dur">${s.duration} min</div>` : ''}
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  }
+  rHtml += '</div>';
+
+  rHtml += '<div><div class="sec-lbl"><span>Recent weight</span></div>';
+  if (weights.length) {
+    rHtml += [...weights].reverse().slice(0,4).map(w =>
+      `<div class="s-row">
+        <div class="s-date">${fmtDate(w.date)}</div>
+        <div style="font-size:17px;font-weight:300;color:var(--text);letter-spacing:-0.02em;">${w.val.toFixed(1)}<span style="font-size:11px;color:var(--t3);margin-left:2px;">kg</span></div>
+      </div>`
+    ).join('');
+  } else {
+    rHtml += '<div style="color:var(--t3);font-size:12px;">No entries yet.</div>';
+  }
+  rHtml += '</div>';
+  document.getElementById('dash-right').innerHTML = rHtml;
+}
+
+// ── Render workouts page ─────────────────────────────────────────────────────
+function renderWorkouts() {
+  renderWeekPlan();
+  renderTemplates();
+  renderLogArea();
+  renderSessionsList();
+}
+
+function renderWeekPlan() {
+  const mon = mondayOf(today());
+  document.getElementById('wk-plan-label').textContent = `This week's plan — ${weekLabel(mon)}`;
+  const [y,m,d] = mon.split('-').map(Number);
+  const t = today();
+  const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  let html = '';
+  for (let i = 0; i < 7; i++) {
+    const dt = new Date(y,m-1,d+i), ds = ldStr(dt);
+    const isToday = ds === t;
+    const isPast  = ds < t;
+    const done    = hasSessionOn(ds);
+    const p       = getPlanFor(ds);
+    const dayLabel = `${labels[i]} ${dt.getDate()}`;
+
+    let statusClass, statusContent = '';
+    if (done) { statusClass = 's-done'; statusContent = '✓'; }
+    else if (isToday && p && p.type !== 'rest') { statusClass = 's-today'; statusContent = '!'; }
+    else if (p && p.type === 'rest') { statusClass = 's-plan'; }
+    else if (p) { statusClass = 's-plan'; }
+    else { statusClass = 's-none'; }
+
+    let planContent = '';
+    if (p) {
+      const exercises = p.exercises ? p.exercises.split('\n').filter(Boolean).join(', ') : '';
+      const todayHighlight = isToday && !done;
+      if (p.type === 'rest') {
+        planContent = `<span class="day-tag dt-rest">Rest</span><span class="day-detail">Take it easy</span>`;
+      } else {
+        planContent = `<span class="day-tag dt-${p.type}">${TYPE_NAMES[p.type]||cap(p.type)}</span>
+          <span class="day-detail">${todayHighlight?'<b>':''}${esc(p.name)}${todayHighlight?'</b>':''}${exercises?' · '+esc(exercises):''}</span>`;
+      }
+    } else {
+      planContent = `<span class="day-empty">No plan — tap to add</span>`;
+    }
+
+    let action;
+    if (isToday && p && !done && p.type !== 'rest') {
+      action = `<button class="day-action primary" onclick="logTodaysPlan()">Log it</button>`;
+    } else if (p) {
+      action = `<button class="day-action" onclick="openPlanEditor('${ds}')">Edit</button>`;
+    } else {
+      action = `<button class="day-action" onclick="openPlanEditor('${ds}')">+ Add</button>`;
+    }
+
+    html += `<div class="day-row ${isToday?'today':''} ${done?'done':''}">
+      <div class="day-status ${statusClass}">${statusContent}</div>
+      <span class="day-name">${dayLabel}</span>
+      <div class="day-plan">${planContent}</div>
+      ${action}
+    </div>`;
+  }
+  document.getElementById('week-plan').innerHTML = html;
+}
+
+function renderTemplates() {
+  const row = document.getElementById('tmpl-row');
+  if (!templates.length) {
+    row.innerHTML = `<div class="tmpl-add" onclick="openTemplateEditor(null)">
+      <div class="plus">+</div>
+      <div>Add your first template</div>
+    </div>`;
+    return;
+  }
+  row.innerHTML = templates.map(t => {
+    const lines = t.exercises ? t.exercises.split('\n').filter(Boolean) : [];
+    return `<div class="tmpl" onclick="openTemplateEditor(${t.id})">
+      <div class="tmpl-tag tag-${t.type}">${TYPE_NAMES[t.type]||cap(t.type)}</div>
+      <div class="tmpl-name">${esc(t.name)}</div>
+      <div class="tmpl-list">${lines.map(l => esc(l)).join('<br>') || '<span style="color:var(--t3);">No exercises yet</span>'}</div>
+      ${t.duration ? `<div class="tmpl-meta">~${t.duration} min</div>` : ''}
+    </div>`;
+  }).join('') + `<div class="tmpl-add" onclick="openTemplateEditor(null)">
+    <div class="plus">+</div>
+    <div>New template</div>
+  </div>`;
+}
+
+function renderLogArea() {
+  const area = document.getElementById('log-area');
+  const todaysPlan = getPlanFor(today());
+  const showPrefill = todaysPlan && todaysPlan.type !== 'rest' && !hasSessionOn(today());
+
+  let preFillBanner = '';
+  if (showPrefill) {
+    preFillBanner = `
+      <div class="log-prefill">
+        <span class="log-prefill-icon">⚡</span>
+        <span class="log-prefill-text">Today's plan is <b>${esc(todaysPlan.name)}</b>. Tap to log it — exercises will be pre-filled.</span>
+        <button class="log-prefill-btn" onclick="usePrefill()">Log ${esc(todaysPlan.name)} →</button>
+      </div>
+      <div class="log-divider">— or log something else —</div>`;
   }
 
-  const p = sheet_(PLAN_SHEET);
-  if (p && p.getLastRow() > 1) {
-    p.getRange(2, 1, p.getLastRow() - 1, 5).getValues().forEach(r => {
-      if (r[0] !== '' && r[0] !== null) plan.push({
-        date: dateStr_(r[0]),
-        name: String(r[1] || ''),
-        type: String(r[2] || '').toLowerCase(),
-        exercises: String(r[3] || ''),
-        duration: Number(r[4]) || 0
-      });
-    });
-  }
+  // If prefill is active, fill in form values; otherwise use defaults
+  const datePrefill   = logPrefill ? logPrefill.date : today();
+  const durPrefill    = logPrefill && logPrefill.duration ? logPrefill.duration : '';
+  const notesPrefill  = logPrefill ? esc(logPrefill.exercises || '') : '';
+  const typesPrefill  = logPrefill ? new Set([logPrefill.type]) : selTypes;
 
-  return json_({ sessions, weights, templates, plan });
-}
+  area.innerHTML = `
+    ${preFillBanner}
+    <div class="form-grid">
+      <div class="field"><div class="field-lbl">Date</div><input type="date" id="s-date" value="${datePrefill}"></div>
+      <div class="field"><div class="field-lbl">Duration (min)</div><input type="number" id="s-dur" placeholder="60" min="1" value="${durPrefill}"></div>
+    </div>
+    <div class="field">
+      <div class="field-lbl">Type — pick one or more</div>
+      <div class="pills" id="type-pills">
+        ${TYPES.map(t => `<span class="pill ${typesPrefill.has(t)?'sel-'+t:''}" data-type="${t}" onclick="toggleType(this)">${TYPE_NAMES[t]}</span>`).join('')}
+      </div>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <div class="field-lbl">Notes — one exercise per line</div>
+      <textarea id="s-notes" placeholder="Squats 4×8&#10;Hip thrusts 3×12">${notesPrefill}</textarea>
+    </div>
+    <button class="btn btn-primary" onclick="addSession()">+ Log session</button>
+    ${logPrefill ? '<button class="btn btn-ghost btn-sm" onclick="cancelPrefill()" style="margin-left:8px;">Cancel pre-fill</button>' : ''}
+  `;
 
-// ── Sessions ─────────────────────────────────────────────────────────────────
-
-function addSession_(s) {
-  const sh = sheet_(SESSIONS_SHEET);
-  if (!sh) return json_({ error: 'Sessions sheet not found.' });
-  sh.appendRow([s.id, s.date, s.duration || '', (s.types || []).join(','), s.notes || '']);
-  return json_({ ok: true });
-}
-function updateSession_(s) {
-  const sh = sheet_(SESSIONS_SHEET);
-  if (!sh) return json_({ error: 'Sessions sheet not found.' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (String(data[i][0]) === String(s.id)) {
-    sh.getRange(i + 1, 1, 1, 5).setValues([[s.id, s.date, s.duration || '', (s.types || []).join(','), s.notes || '']]);
-    return json_({ ok: true });
-  }
-  return json_({ error: 'Session not found.' });
-}
-function deleteSession_(id) {
-  const sh = sheet_(SESSIONS_SHEET);
-  if (!sh) return json_({ error: 'Sessions sheet not found.' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (String(data[i][0]) === String(id)) { sh.deleteRow(i + 1); return json_({ ok: true }); }
-  return json_({ error: 'Session not found.' });
+  // Re-sync selTypes from prefill if needed
+  if (logPrefill) selTypes = new Set([logPrefill.type]);
 }
 
-// ── Weights ──────────────────────────────────────────────────────────────────
-
-function addWeight_(w) {
-  const sh = sheet_(WEIGHTS_SHEET);
-  if (!sh) return json_({ error: 'Weights sheet not found.' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (dateStr_(data[i][0]) === w.date) { sh.getRange(i + 1, 2).setValue(w.val); return json_({ ok: true }); }
-  sh.appendRow([w.date, w.val]);
-  return json_({ ok: true });
+function usePrefill() {
+  const p = getPlanFor(today());
+  if (!p) return;
+  logPrefill = p;
+  selTypes = new Set([p.type]);
+  renderLogArea();
+  setTimeout(() => document.getElementById('log-area').scrollIntoView({ behavior: 'smooth' }), 50);
 }
-function deleteWeight_(date) {
-  const sh = sheet_(WEIGHTS_SHEET);
-  if (!sh) return json_({ error: 'Weights sheet not found.' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (dateStr_(data[i][0]) === date) { sh.deleteRow(i + 1); return json_({ ok: true }); }
-  return json_({ error: 'Weight not found.' });
+function cancelPrefill() {
+  logPrefill = null;
+  selTypes.clear();
+  renderLogArea();
 }
 
-// ── Templates ────────────────────────────────────────────────────────────────
+function renderSessionsList() {
+  const el = document.getElementById('session-list');
+  if (!sessions.length) { el.innerHTML = '<div class="empty">No sessions yet. Log your first workout above.</div>'; return; }
+  const groups = byWk(sessions);
+  const mons = Object.keys(groups).sort((a,b) => b.localeCompare(a)).slice(0,8); // show recent 8 weeks
+  el.innerHTML = mons.map(mon => {
+    const ws = groups[mon].sort((a,b) => b.date.localeCompare(a.date));
+    return `<div class="week-section">
+      <div class="week-sec-hdr">
+        <span class="week-sec-title">${weekLabel(mon)}</span>
+        <span class="week-sec-cnt">${ws.length} session${ws.length!==1?'s':''}</span>
+      </div>
+      ${ws.map(s => {
+        if (editSessionId === s.id) {
+          editTypes = new Set(s.types);
+          const pills = TYPES.map(t =>
+            `<span class="pill ${s.types.includes(t)?'sel-'+t:''}" data-type="${t}" onclick="toggleEditType(this)">${TYPE_NAMES[t]}</span>`
+          ).join('');
+          return `<div class="edit-panel">
+            <div class="form-grid">
+              <div class="field"><div class="field-lbl">Date</div><input type="date" id="ee-date-${s.id}" value="${s.date}"></div>
+              <div class="field"><div class="field-lbl">Duration (min)</div><input type="number" id="ee-dur-${s.id}" value="${s.duration||''}" placeholder="60" min="1"></div>
+            </div>
+            <div class="field"><div class="field-lbl">Type</div><div class="pills">${pills}</div></div>
+            <div class="field" style="margin-top:10px;"><div class="field-lbl">Notes</div><textarea id="ee-notes-${s.id}">${esc(s.notes||'')}</textarea></div>
+            <div class="edit-row">
+              <button class="btn btn-primary btn-sm" onclick="saveEdit(${s.id})">✓ Save</button>
+              <button class="btn btn-ghost btn-sm" onclick="cancelEdit()">Cancel</button>
+            </div>
+          </div>`;
+        }
+        const lines = s.notes ? s.notes.split('\n').filter(Boolean) : [];
+        return `<div class="se">
+          <div class="se-left">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px;">
+              <span class="s-date">${fmtDate(s.date)}</span>
+              ${s.duration ? `<span class="s-dur">${s.duration} min</span>` : ''}
+            </div>
+            <div class="s-tags">${tagsHtml(s.types)}</div>
+            ${lines.length ? `<div class="s-notes">${lines.map(l=>`<div>${esc(l)}</div>`).join('')}</div>` : ''}
+          </div>
+          <div class="se-actions">
+            <button class="icon-btn" onclick="startEdit(${s.id})" title="Edit">✎</button>
+            <button class="icon-btn danger" onclick="delSession(${s.id})" title="Delete">🗑</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  }).join('');
+}
 
-function addTemplate_(t) {
-  const sh = sheet_(TEMPLATES_SHEET);
-  if (!sh) return json_({ error: 'Templates sheet not found. Add a tab named "Templates".' });
-  sh.appendRow([t.id, t.name, t.type, t.exercises || '', t.duration || '']);
-  return json_({ ok: true });
+// ── Body weight ──────────────────────────────────────────────────────────────
+function addWeight() {
+  const date = document.getElementById('bw-date').value;
+  const val  = parseFloat(document.getElementById('bw-val').value);
+  if (!date || isNaN(val)) return alert('Enter date and weight.');
+  const ei = weights.findIndex(w => w.date === date);
+  if (ei >= 0) weights[ei].val = val;
+  else weights.push({date, val});
+  weights.sort((a,b) => a.date > b.date ? 1 : -1);
+  saveLocal();
+  pushToSheet('addWeight', { weight: {date, val} });
+  document.getElementById('bw-val').value = '';
+  renderBwList(); renderBwChart(); renderDashboard();
 }
-function updateTemplate_(t) {
-  const sh = sheet_(TEMPLATES_SHEET);
-  if (!sh) return json_({ error: 'Templates sheet not found.' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (String(data[i][0]) === String(t.id)) {
-    sh.getRange(i + 1, 1, 1, 5).setValues([[t.id, t.name, t.type, t.exercises || '', t.duration || '']]);
-    return json_({ ok: true });
-  }
-  return json_({ error: 'Template not found.' });
+function delWeight(date) {
+  if (!confirm('Delete this entry?')) return;
+  weights = weights.filter(w => w.date !== date);
+  saveLocal();
+  pushToSheet('deleteWeight', { date });
+  renderBwList(); renderBwChart(); renderDashboard();
 }
-function deleteTemplate_(id) {
-  const sh = sheet_(TEMPLATES_SHEET);
-  if (!sh) return json_({ error: 'Templates sheet not found.' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (String(data[i][0]) === String(id)) { sh.deleteRow(i + 1); return json_({ ok: true }); }
-  return json_({ error: 'Template not found.' });
+function renderBwList() {
+  const el = document.getElementById('bw-list');
+  if (!weights.length) { el.innerHTML = '<div class="empty">No entries yet.</div>'; return; }
+  const rev = [...weights].reverse();
+  el.innerHTML = rev.map((w,i) => {
+    const prev = rev[i+1];
+    let delta = '';
+    if (prev) {
+      const diff = (w.val - prev.val).toFixed(1);
+      const cls = diff > 0 ? 'd-up' : diff < 0 ? 'd-dn' : '';
+      delta = `<span class="bw-delta ${cls}">${diff > 0 ? '+' : ''}${diff} kg</span>`;
+    }
+    return `<div class="bw-entry">
+      <div>
+        <div class="bw-date">${fmtDate(w.date)}</div>
+        <div><span class="bw-val">${w.val.toFixed(1)}</span><span class="bw-unit">kg</span>${delta}</div>
+      </div>
+      <button class="icon-btn danger" onclick="delWeight('${w.date}')" title="Delete">🗑</button>
+    </div>`;
+  }).join('');
+}
+let bwChartInst = null;
+function renderBwChart() {
+  if (bwChartInst) { bwChartInst.destroy(); bwChartInst = null; }
+  const ctx = document.getElementById('bwChart');
+  if (!ctx || weights.length < 2) return;
+  bwChartInst = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: weights.map(w => fmtShort(w.date)),
+      datasets: [{
+        data: weights.map(w => w.val),
+        borderColor: '#FF4040',
+        backgroundColor: 'rgba(255,64,64,0.04)',
+        fill: true, tension: 0.3,
+        pointRadius: 3, pointBackgroundColor: '#FF4040', borderWidth: 1.5
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { ticks:{color:'#BABABA',callback:v=>v+'kg'}, grid:{color:'#F5F5F5'}, border:{display:false} },
+        x: { ticks:{color:'#BABABA',maxTicksLimit:8}, grid:{display:false}, border:{display:false} }
+      }
+    }
+  });
 }
 
-// ── Plan ─────────────────────────────────────────────────────────────────────
+function renderAll() {
+  renderDashboard();
+  renderWorkouts();
+  renderBwList();
+}
 
-function setPlan_(p) {
-  const sh = sheet_(PLAN_SHEET);
-  if (!sh) return json_({ error: 'Plan sheet not found. Add a tab named "Plan".' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (dateStr_(data[i][0]) === p.date) {
-    sh.getRange(i + 1, 1, 1, 5).setValues([[p.date, p.name, p.type, p.exercises || '', p.duration || '']]);
-    return json_({ ok: true });
-  }
-  sh.appendRow([p.date, p.name, p.type, p.exercises || '', p.duration || '']);
-  return json_({ ok: true });
+// ── Init ─────────────────────────────────────────────────────────────────────
+document.getElementById('bw-date').value = today();
+
+if (!SHEET_URL) {
+  showSetup();
+} else {
+  hideSetup();
+  renderAll();
+  loadFromSheet();
 }
-function clearPlan_(date) {
-  const sh = sheet_(PLAN_SHEET);
-  if (!sh) return json_({ error: 'Plan sheet not found.' });
-  const data = sh.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) if (dateStr_(data[i][0]) === date) { sh.deleteRow(i + 1); return json_({ ok: true }); }
-  return json_({ ok: true });
+
+// Service worker registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err));
+  });
 }
+</script>
+</body>
+</html>
