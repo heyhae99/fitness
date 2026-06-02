@@ -642,10 +642,11 @@ function addSession() {
   const date  = document.getElementById('s-date').value;
   const dur   = parseInt(document.getElementById('s-dur').value) || 0;
   const notes = document.getElementById('s-notes').value.trim();
+  const cal   = parseInt(document.getElementById('s-cal').value) || 0;
   const types = [...selTypes];
   if (!date)         return alert('Pick a date.');
   if (!types.length) return alert('Select at least one type.');
-  const session = { id: Date.now(), date, duration: dur, types, notes };
+  const session = { id: Date.now(), date, duration: dur, types, notes, calories: cal };
   sessions.unshift(session);
   sessions.sort((a,b) => b.date.localeCompare(a.date));
   saveLocal();
@@ -675,11 +676,12 @@ function saveEdit(id) {
   const date  = document.getElementById(`ee-date-${id}`).value;
   const dur   = parseInt(document.getElementById(`ee-dur-${id}`).value) || 0;
   const notes = document.getElementById(`ee-notes-${id}`).value.trim();
+  const cal   = parseInt(document.getElementById(`ee-cal-${id}`).value) || 0;
   const types = [...editTypes];
   if (!date || !types.length) return alert('Fill required fields.');
   const i = sessions.findIndex(s => s.id === id);
   if (i >= 0) {
-    sessions[i] = {...sessions[i], date, duration: dur, types, notes};
+    sessions[i] = {...sessions[i], date, duration: dur, types, notes, calories: cal};
     pushToSheet('updateSession', { session: sessions[i] });
   }
   sessions.sort((a,b) => b.date.localeCompare(a.date));
@@ -938,7 +940,7 @@ function renderDashboard() {
     return `<div class="s-row">
       <div>
         <div class="s-date">${fmtDate(s.date)}</div>
-        <div class="s-tags">${tagsHtml(s.types)}</div>
+        <div class="s-tags">${tagsHtml(s.types)}${s.calories ? `<span class="s-tag-sep"> · </span><span style="color:var(--t3);">${s.calories} cal</span>` : ''}</div>
         ${lines.length ? `<div class="s-notes">${lines.map(l=>`<div>${esc(l)}</div>`).join('')}</div>` : ''}
       </div>
       ${s.duration ? `<div class="s-dur">${s.duration} min</div>` : ''}
@@ -966,7 +968,7 @@ function renderDashboard() {
           ${ws.map(s => `<div class="s-row">
             <div>
               <div class="s-date">${fmtDate(s.date)}</div>
-              <div class="s-tags">${tagsHtml(s.types)}</div>
+              <div class="s-tags">${tagsHtml(s.types)}${s.calories ? `<span class="s-tag-sep"> · </span><span style="color:var(--t3);">${s.calories} cal</span>` : ''}</div>
             </div>
             ${s.duration ? `<div class="s-dur">${s.duration} min</div>` : ''}
           </div>`).join('')}
@@ -1098,6 +1100,7 @@ function renderLogArea() {
   const datePrefill   = logPrefill ? logPrefill.date : today();
   const durPrefill    = logPrefill && logPrefill.duration ? logPrefill.duration : '';
   const notesPrefill  = logPrefill ? esc(logPrefill.exercises || '') : '';
+  const calPrefill    = logPrefill && logPrefill.calories ? logPrefill.calories : '';
   const typesPrefill  = logPrefill ? new Set([logPrefill.type]) : selTypes;
 
   area.innerHTML = `
@@ -1105,6 +1108,7 @@ function renderLogArea() {
     <div class="form-grid">
       <div class="field"><div class="field-lbl">Date</div><input type="date" id="s-date" value="${datePrefill}"></div>
       <div class="field"><div class="field-lbl">Duration (min)</div><input type="number" id="s-dur" placeholder="60" min="1" value="${durPrefill}"></div>
+      <div class="field"><div class="field-lbl">Calories burned</div><input type="number" id="s-cal" placeholder="350" min="0" value="${calPrefill}"></div>
     </div>
     <div class="field">
       <div class="field-lbl">Type — pick one or more</div>
@@ -1160,6 +1164,7 @@ function renderSessionsList() {
             <div class="form-grid">
               <div class="field"><div class="field-lbl">Date</div><input type="date" id="ee-date-${s.id}" value="${s.date}"></div>
               <div class="field"><div class="field-lbl">Duration (min)</div><input type="number" id="ee-dur-${s.id}" value="${s.duration||''}" placeholder="60" min="1"></div>
+              <div class="field"><div class="field-lbl">Calories burned</div><input type="number" id="ee-cal-${s.id}" value="${s.calories||''}" placeholder="350" min="0"></div>
             </div>
             <div class="field"><div class="field-lbl">Type</div><div class="pills">${pills}</div></div>
             <div class="field" style="margin-top:10px;"><div class="field-lbl">Notes</div><textarea id="ee-notes-${s.id}">${esc(s.notes||'')}</textarea></div>
@@ -1176,7 +1181,7 @@ function renderSessionsList() {
               <span class="s-date">${fmtDate(s.date)}</span>
               ${s.duration ? `<span class="s-dur">${s.duration} min</span>` : ''}
             </div>
-            <div class="s-tags">${tagsHtml(s.types)}</div>
+            <div class="s-tags">${tagsHtml(s.types)}${s.calories ? `<span class="s-tag-sep"> · </span><span style="color:var(--t3);">${s.calories} cal</span>` : ''}</div>
             ${lines.length ? `<div class="s-notes">${lines.map(l=>`<div>${esc(l)}</div>`).join('')}</div>` : ''}
           </div>
           <div class="se-actions">
