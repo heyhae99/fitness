@@ -4,8 +4,8 @@
   "description": "Personal fitness and body weight tracker",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#FF4040",
+  "background_color": "#0B130E",
+  "theme_color": "#0B130E",
   "orientation": "portrait",
   "icons": [
     {
