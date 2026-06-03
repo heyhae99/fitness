@@ -1,7 +1,7 @@
 // Service worker — makes the app open without internet.
 // Don't edit unless you know what you're doing.
 
-const CACHE = 'fitness-v10';
+const CACHE = 'fitness-v12';
 const ASSETS = [
   './',
   './index.html',
