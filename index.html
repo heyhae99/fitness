@@ -76,7 +76,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .today-card.rest .today-lbl{color:var(--t3);}
 
 /* Dashboard columns */
-.dash-cols{display:grid;grid-template-columns:1fr 240px;gap:52px;align-items:start;}
+.dash-cols{display:grid;grid-template-columns:1fr;gap:38px;align-items:start;}
 .sec-lbl{font-size:12px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
 .sec-act{font-size:12px;color:var(--accent);font-weight:600;text-transform:none;letter-spacing:0;cursor:pointer;border:none;background:none;font-family:inherit;}
 
@@ -130,7 +130,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .pg-head{margin-bottom:28px;}
 
 /* Day plan rows */
-.day-row{display:flex;align-items:center;padding:11px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;gap:12px;transition:border-color 0.15s;}
+.day-row{display:flex;align-items:center;padding:11px 14px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;gap:12px;transition:border-color 0.15s;width:100%;overflow:hidden;}
 .day-row:hover{border-color:#DDD;}
 .day-row.today{border-color:var(--accent);background:#FFF8F8;}
 .day-row.done{background:#FAFAFA;}
@@ -141,13 +141,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .s-missed{border:1.5px solid #D8D8D8;background:#FAFAFA;}
 .s-none{border:1px dashed #D8D8D8;}
 .day-name{font-size:13px;font-weight:600;color:var(--t2);width:58px;flex-shrink:0;}
-.day-plan{flex:1;display:flex;align-items:center;gap:8px;min-width:0;}
+.day-plan{flex:1;display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;}
 .day-tag{font-size:12px;font-weight:700;padding:2px 9px;border-radius:99px;flex-shrink:0;}
 .dt-lower{background:#EEF2FF;color:#5878C8;} .dt-upper{background:#F4EEFF;color:#7C50C8;}
 .dt-cardio{background:#E8F5EE;color:#208060;} .dt-core{background:#FFF1E6;color:#C06020;}
 .dt-pilates{background:#FFEEF5;color:#B84080;} .dt-running{background:#E8F5EC;color:#207A40;}
 .dt-rest{background:#F0F0F0;color:#888;}
-.day-detail{font-size:13px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.day-detail{flex:1;font-size:13px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 .day-detail b{color:var(--text);font-weight:600;}
 .day-empty{font-size:13px;color:#C8C8C8;font-style:italic;}
 .day-action{font-size:12px;color:var(--t3);font-weight:600;flex-shrink:0;padding:5px 11px;border:1px solid var(--border);border-radius:6px;cursor:pointer;background:#fff;font-family:inherit;}
@@ -269,7 +269,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
   .stats{gap:16px;}
   .stat-div{display:none;}
   .dash-cols,.form-grid,.bw-cols{grid-template-columns:1fr;gap:28px;}
-  .day-row{flex-wrap:wrap;}
   .day-name{width:auto;}
   .tmpl-row{margin:0 -18px;padding-left:18px;padding-right:18px;}
   .modal{align-items:flex-end;}
@@ -927,52 +926,9 @@ function renderDashboard() {
 
   // Week column
   const thisMon = mondayOf(today());
-  const [y,m,d] = thisMon.split('-').map(Number);
-  const t = today();
-  const thisWeek = sessions.filter(s => mondayOf(s.date) === thisMon).sort((a,b) => b.date.localeCompare(a.date));
 
   let wHtml = `<div class="sec-lbl"><span>This week — ${weekLabel(thisMon)}</span><button class="sec-act" onclick="clearWeekPlan()">Clear week</button></div>
-    <div class="week-unified">
-      ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((lb,i) => {
-        const dt     = new Date(y,m-1,d+i), ds = ldStr(dt);
-        const hit    = hasSessionOn(ds);
-        const isT    = ds === t;
-        const p      = getPlanFor(ds);
-        const isRest = p && p.type === 'rest';
-
-        // Cell colour
-        let cellClass = '';
-        if (isRest)   cellClass = 'wuc-rest';
-        else if (hit) cellClass = 'wuc-done';
-        else if (isT) cellClass = 'wuc-today';
-
-        // Bottom line: emoji + name
-        let emoji = '', name = '';
-        if (isRest) {
-          emoji = '😌'; name = 'Rest';
-        } else if (p) {
-          emoji = TYPE_EMOJI[p.type] || '💪';
-          name  = (hit ? '✓ ' : '') + esc(p.name);
-        } else if (hit) {
-          const sesh = sessions.find(s => s.date === ds);
-          emoji = sesh && sesh.types[0] ? (TYPE_EMOJI[sesh.types[0]] || '💪') : '💪';
-          name  = '✓ ' + (sesh ? (TYPE_NAMES[sesh.types[0]] || '') : '');
-        }
-
-        const bottomHtml = name
-          ? `<span class="wuc-name">${name}</span>`
-          : `<span class="wuc-empty">—</span>`;
-
-        return `<div class="week-uc ${cellClass}">
-          <div class="wuc-day">${lb}</div>
-          <div class="wuc-date">${dt.getDate()}</div>
-          <div class="wuc-bottom">${bottomHtml}</div>
-        </div>`;
-      }).join('')}
-    </div>`;
-
-  // Add week-plan slot so renderWeekPlan() can populate it
-  wHtml += `<div id="week-plan" style="margin-top:16px;"></div>`;
+    <div id="week-plan"></div>`;
 
   document.getElementById('dash-week').innerHTML = wHtml;
   renderWeekPlan();
