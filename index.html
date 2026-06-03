@@ -92,7 +92,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .wuc-date{font-size:18px;font-weight:700;color:#111;line-height:1;margin-bottom:7px;}
 .wuc-bottom{display:flex;align-items:center;justify-content:center;gap:3px;}
 .wuc-emoji{font-size:13px;line-height:1;flex-shrink:0;}
-.wuc-name{font-size:9px;font-weight:600;color:#555;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:46px;}
+.wuc-name{font-size:11px;font-weight:600;color:#555;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:52px;}
 .wuc-empty{font-size:10px;color:#DDD;}
 .wuc-done .wuc-day{color:#5CB87A;}
 .wuc-done .wuc-date{color:#2D7A4A;}
@@ -322,13 +322,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
       <div class="pg-title">Workouts</div>
       <div class="pg-sub">Plan your week, run through templates, log what you did</div>
     </div>
-
-    <!-- Week plan -->
-    <div class="sec-lbl">
-      <span id="wk-plan-label">This week's plan</span>
-      <button class="sec-act" onclick="clearWeekPlan()">Clear week</button>
-    </div>
-    <div id="week-plan"></div>
 
     <!-- Templates -->
     <div class="sec-lbl" style="margin-top:32px;">
@@ -938,7 +931,7 @@ function renderDashboard() {
   const t = today();
   const thisWeek = sessions.filter(s => mondayOf(s.date) === thisMon).sort((a,b) => b.date.localeCompare(a.date));
 
-  let wHtml = `<div class="sec-lbl"><span>This week — ${weekLabel(thisMon)}</span></div>
+  let wHtml = `<div class="sec-lbl"><span>This week — ${weekLabel(thisMon)}</span><button class="sec-act" onclick="clearWeekPlan()">Clear week</button></div>
     <div class="week-unified">
       ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((lb,i) => {
         const dt     = new Date(y,m-1,d+i), ds = ldStr(dt);
@@ -966,8 +959,8 @@ function renderDashboard() {
           name  = '✓ ' + (sesh ? (TYPE_NAMES[sesh.types[0]] || '') : '');
         }
 
-        const bottomHtml = (emoji || name)
-          ? `${emoji ? `<span class="wuc-emoji">${emoji}</span>` : ''}<span class="wuc-name">${name}</span>`
+        const bottomHtml = name
+          ? `<span class="wuc-name">${name}</span>`
           : `<span class="wuc-empty">—</span>`;
 
         return `<div class="week-uc ${cellClass}">
@@ -978,19 +971,11 @@ function renderDashboard() {
       }).join('')}
     </div>`;
 
-  wHtml += thisWeek.length ? thisWeek.map(s => {
-    const lines = s.notes ? s.notes.split('\n').filter(Boolean) : [];
-    return `<div class="s-row">
-      <div>
-        <div class="s-date">${fmtDate(s.date)}</div>
-        <div class="s-tags">${tagsHtml(s.types)}${s.calories ? `<span class="s-tag-sep"> · </span><span style="color:var(--t3);">${s.calories} cal</span>` : ''}</div>
-        ${lines.length ? `<div class="s-notes">${lines.map(l=>`<div>${esc(l)}</div>`).join('')}</div>` : ''}
-      </div>
-      ${s.duration ? `<div class="s-dur">${s.duration} min</div>` : ''}
-    </div>`;
-  }).join('') : '<div style="color:var(--t3);font-size:14px;padding:12px 0 4px;">No sessions this week yet.</div>';
+  // Add week-plan slot so renderWeekPlan() can populate it
+  wHtml += `<div id="week-plan" style="margin-top:16px;"></div>`;
 
   document.getElementById('dash-week').innerHTML = wHtml;
+  renderWeekPlan();
 
   // Right column: past weeks + recent weight
   // Monthly stats
@@ -1041,7 +1026,6 @@ function renderDashboard() {
 
 // ── Render workouts page ─────────────────────────────────────────────────────
 function renderWorkouts() {
-  renderWeekPlan();
   renderTemplates();
   renderLogArea();
   renderSessionsList();
@@ -1049,7 +1033,8 @@ function renderWorkouts() {
 
 function renderWeekPlan() {
   const mon = mondayOf(today());
-  document.getElementById('wk-plan-label').textContent = `This week's plan — ${weekLabel(mon)}`;
+  const lbl = document.getElementById('wk-plan-label');
+  if (lbl) lbl.textContent = `This week's plan — ${weekLabel(mon)}`;
   const [y,m,d] = mon.split('-').map(Number);
   const t = today();
   const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
