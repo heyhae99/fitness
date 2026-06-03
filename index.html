@@ -81,14 +81,26 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .sec-act{font-size:12px;color:var(--accent);font-weight:600;text-transform:none;letter-spacing:0;cursor:pointer;border:none;background:none;font-family:inherit;}
 
 /* Week grid */
-.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:24px;}
-.wc{text-align:center;}
-.wc-lbl{font-size:11px;font-weight:500;color:var(--t3);margin-bottom:6px;}
-.wc-dot{width:34px;height:34px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid var(--border);color:var(--t3);}
-.wc-dot.num{font-size:11px;font-weight:600;}
-.wc-dot.done{background:#EEF8F1;border-color:#A8D8B9;}
-.wc-dot.today{border:2px solid var(--accent);background:#FFF5F5;}
-.wc-dot.today.num{color:var(--accent);font-weight:700;}
+/* Unified week row */
+.week-unified{display:flex;border:1px solid #E8E8E8;border-radius:12px;overflow:hidden;margin-bottom:24px;}
+.week-uc{flex:1;padding:10px 4px;text-align:center;border-right:1px solid #E8E8E8;min-width:0;}
+.week-uc:last-child{border-right:none;}
+.wuc-done{background:#EEF8F1;}
+.wuc-today{background:#FFF5F5;}
+.wuc-rest{background:#F5F5F5;}
+.wuc-day{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:3px;}
+.wuc-date{font-size:18px;font-weight:700;color:#111;line-height:1;margin-bottom:7px;}
+.wuc-bottom{display:flex;align-items:center;justify-content:center;gap:3px;}
+.wuc-emoji{font-size:13px;line-height:1;flex-shrink:0;}
+.wuc-name{font-size:9px;font-weight:600;color:#555;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:46px;}
+.wuc-empty{font-size:10px;color:#DDD;}
+.wuc-done .wuc-day{color:#5CB87A;}
+.wuc-done .wuc-date{color:#2D7A4A;}
+.wuc-done .wuc-name{color:#2D7A4A;}
+.wuc-today .wuc-day{color:#FF4040;}
+.wuc-today .wuc-date{color:#FF4040;}
+.wuc-today .wuc-name{color:#FF4040;}
+.wuc-rest .wuc-day,.wuc-rest .wuc-date,.wuc-rest .wuc-name{color:#AAAAAA;}
 
 /* Session rows */
 .s-row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #F5F5F5;}
@@ -927,27 +939,41 @@ function renderDashboard() {
   const thisWeek = sessions.filter(s => mondayOf(s.date) === thisMon).sort((a,b) => b.date.localeCompare(a.date));
 
   let wHtml = `<div class="sec-lbl"><span>This week — ${weekLabel(thisMon)}</span></div>
-    <div class="week-grid">
+    <div class="week-unified">
       ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((lb,i) => {
-        const dt = new Date(y,m-1,d+i), ds = ldStr(dt);
-        const hit = hasSessionOn(ds), isT = ds === t;
-        const p   = getPlanFor(ds);
-        // Pick emoji: from plan type, or from logged session type, or date number
-        let emoji = null;
-        if (p && p.type === 'rest') {
-          emoji = '😌';
-        } else if (p && p.type) {
+        const dt     = new Date(y,m-1,d+i), ds = ldStr(dt);
+        const hit    = hasSessionOn(ds);
+        const isT    = ds === t;
+        const p      = getPlanFor(ds);
+        const isRest = p && p.type === 'rest';
+
+        // Cell colour
+        let cellClass = '';
+        if (isRest)   cellClass = 'wuc-rest';
+        else if (hit) cellClass = 'wuc-done';
+        else if (isT) cellClass = 'wuc-today';
+
+        // Bottom line: emoji + name
+        let emoji = '', name = '';
+        if (isRest) {
+          emoji = '😌'; name = 'Rest';
+        } else if (p) {
           emoji = TYPE_EMOJI[p.type] || '💪';
+          name  = (hit ? '✓ ' : '') + esc(p.name);
         } else if (hit) {
           const sesh = sessions.find(s => s.date === ds);
           emoji = sesh && sesh.types[0] ? (TYPE_EMOJI[sesh.types[0]] || '💪') : '💪';
+          name  = '✓ ' + (sesh ? (TYPE_NAMES[sesh.types[0]] || '') : '');
         }
-        const hasEmoji = emoji !== null;
-        const classes  = [hit ? 'done' : '', isT ? 'today' : '', hasEmoji ? '' : 'num'].filter(Boolean).join(' ');
-        const content  = hasEmoji ? emoji : dt.getDate();
-        return `<div class="wc">
-          <div class="wc-lbl">${lb}</div>
-          <div class="wc-dot ${classes}">${content}</div>
+
+        const bottomHtml = (emoji || name)
+          ? `${emoji ? `<span class="wuc-emoji">${emoji}</span>` : ''}<span class="wuc-name">${name}</span>`
+          : `<span class="wuc-empty">—</span>`;
+
+        return `<div class="week-uc ${cellClass}">
+          <div class="wuc-day">${lb}</div>
+          <div class="wuc-date">${dt.getDate()}</div>
+          <div class="wuc-bottom">${bottomHtml}</div>
         </div>`;
       }).join('')}
     </div>`;
