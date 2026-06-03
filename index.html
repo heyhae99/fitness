@@ -84,9 +84,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:24px;}
 .wc{text-align:center;}
 .wc-lbl{font-size:11px;font-weight:500;color:var(--t3);margin-bottom:6px;}
-.wc-dot{width:26px;height:26px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;border:1px solid var(--border);color:var(--t3);}
-.wc-dot.done{background:var(--text);border-color:var(--text);color:#fff;font-size:13px;}
-.wc-dot.today{border:1.5px solid var(--accent);color:var(--accent);font-weight:700;}
+.wc-dot{width:34px;height:34px;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;font-size:19px;border:1px solid var(--border);color:var(--t3);}
+.wc-dot.num{font-size:11px;font-weight:600;}
+.wc-dot.done{background:#EEF8F1;border-color:#A8D8B9;}
+.wc-dot.today{border:2px solid var(--accent);background:#FFF5F5;}
+.wc-dot.today.num{color:var(--accent);font-weight:700;}
 
 /* Session rows */
 .s-row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #F5F5F5;}
@@ -467,6 +469,7 @@ let logPrefill = null; // template object if pre-filling from a plan
 
 const TYPES = ['lower','upper','cardio','core','pilates','running'];
 const TYPE_NAMES = { lower:'Lower', upper:'Upper', cardio:'Cardio', core:'Core', pilates:'Pilates', running:'Running' };
+const TYPE_EMOJI = { lower:'🦵', upper:'💪', cardio:'🏃', core:'🔥', pilates:'🧘', running:'👟', rest:'😌' };
 
 function saveLocal() {
   localStorage.setItem('ft_sessions',  JSON.stringify(sessions));
@@ -928,9 +931,23 @@ function renderDashboard() {
       ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((lb,i) => {
         const dt = new Date(y,m-1,d+i), ds = ldStr(dt);
         const hit = hasSessionOn(ds), isT = ds === t;
+        const p   = getPlanFor(ds);
+        // Pick emoji: from plan type, or from logged session type, or date number
+        let emoji = null;
+        if (p && p.type === 'rest') {
+          emoji = '😌';
+        } else if (p && p.type) {
+          emoji = TYPE_EMOJI[p.type] || '💪';
+        } else if (hit) {
+          const sesh = sessions.find(s => s.date === ds);
+          emoji = sesh && sesh.types[0] ? (TYPE_EMOJI[sesh.types[0]] || '💪') : '💪';
+        }
+        const hasEmoji = emoji !== null;
+        const classes  = [hit ? 'done' : '', isT ? 'today' : '', hasEmoji ? '' : 'num'].filter(Boolean).join(' ');
+        const content  = hasEmoji ? emoji : dt.getDate();
         return `<div class="wc">
           <div class="wc-lbl">${lb}</div>
-          <div class="wc-dot ${hit?'done':isT?'today':''}">${hit ? '✓' : dt.getDate()}</div>
+          <div class="wc-dot ${classes}">${content}</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -950,33 +967,36 @@ function renderDashboard() {
   document.getElementById('dash-week').innerHTML = wHtml;
 
   // Right column: past weeks + recent weight
-  const groups = byWk(sessions);
-  const pastMons = Object.keys(groups).filter(m => m !== thisMon).sort((a,b) => b.localeCompare(a));
-  let rHtml = '<div style="margin-bottom:32px;"><div class="sec-lbl"><span>Past weeks</span></div>';
-  if (!pastMons.length) {
-    rHtml += '<div style="color:var(--t3);font-size:14px;">Previous weeks will appear here.</div>';
-  } else {
-    rHtml += pastMons.map(mon => {
-      const ws = (groups[mon]||[]).sort((a,b) => b.date.localeCompare(a.date));
-      const sid = 'pw' + mon.replace(/-/g,'');
-      return `<div class="past-week" id="${sid}">
-        <div class="past-row" onclick="document.getElementById('${sid}').classList.toggle('open')">
-          <span class="past-lbl">${weekLabel(mon)}</span>
-          <div style="display:flex;align-items:center;"><span class="past-cnt">${ws.length}</span><span class="past-chev">›</span></div>
-        </div>
-        <div class="past-body">
-          ${ws.map(s => `<div class="s-row">
-            <div>
-              <div class="s-date">${fmtDate(s.date)}</div>
-              <div class="s-tags">${tagsHtml(s.types)}${s.calories ? `<span class="s-tag-sep"> · </span><span style="color:var(--t3);">${s.calories} cal</span>` : ''}</div>
-            </div>
-            ${s.duration ? `<div class="s-dur">${s.duration} min</div>` : ''}
-          </div>`).join('')}
-        </div>
-      </div>`;
-    }).join('');
-  }
-  rHtml += '</div>';
+  // Monthly stats
+  const now2 = new Date();
+  const monthStr = `${now2.getFullYear()}-${pad(now2.getMonth()+1)}`;
+  const monthSessions = sessions.filter(s => s.date.startsWith(monthStr));
+  const typeCounts = {};
+  monthSessions.forEach(s => s.types.forEach(t => { typeCounts[t] = (typeCounts[t]||0)+1; }));
+  const topType = Object.keys(typeCounts).sort((a,b) => typeCounts[b]-typeCounts[a])[0];
+  const monthName = now2.toLocaleDateString('en-GB',{month:'long'});
+  // Avg sessions/week this month (weeks elapsed so far)
+  const dayOfMonth = now2.getDate();
+  const weeksElapsed = Math.max(1, Math.ceil(dayOfMonth / 7));
+  const avgPerWeek = (monthSessions.length / weeksElapsed).toFixed(1);
+
+  let rHtml = `<div style="margin-bottom:32px;">
+    <div class="sec-lbl"><span>${monthName}</span></div>
+    <div class="s-row" style="border-bottom:1px solid #F5F5F5;">
+      <div style="font-size:13px;color:var(--t2);">Sessions</div>
+      <div style="font-size:22px;font-weight:300;color:var(--text);letter-spacing:-0.02em;">${monthSessions.length}</div>
+    </div>
+    <div class="s-row" style="border-bottom:1px solid #F5F5F5;">
+      <div style="font-size:13px;color:var(--t2);">Avg per week</div>
+      <div style="font-size:22px;font-weight:300;color:var(--text);letter-spacing:-0.02em;">${avgPerWeek}</div>
+    </div>
+    <div class="s-row" style="border-bottom:none;">
+      <div style="font-size:13px;color:var(--t2);">Most trained</div>
+      <div style="font-size:15px;font-weight:600;letter-spacing:-0.01em;">
+        ${topType ? `<span class="tag-${topType}">${TYPE_EMOJI[topType]||''} ${TYPE_NAMES[topType]} <span style="font-weight:400;color:var(--t3);font-size:13px;">${typeCounts[topType]}×</span></span>` : '<span style="color:var(--t3);font-size:13px;font-weight:400;">—</span>'}
+      </div>
+    </div>
+  </div>`;
 
   rHtml += '<div><div class="sec-lbl"><span>Recent weight</span></div>';
   if (weights.length) {
@@ -1040,7 +1060,10 @@ function renderWeekPlan() {
 
     let action;
     if (isToday && p && !done && p.type !== 'rest') {
-      action = `<button class="day-action primary" onclick="logTodaysPlan()">Log it</button>`;
+      action = `<div style="display:flex;gap:5px;flex-shrink:0;">
+        <button class="day-action primary" onclick="logTodaysPlan()">Log it</button>
+        <button class="day-action" onclick="openPlanEditor('${ds}')">Edit</button>
+      </div>`;
     } else if (p) {
       action = `<button class="day-action" onclick="openPlanEditor('${ds}')">Edit</button>`;
     } else {
