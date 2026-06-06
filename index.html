@@ -162,6 +162,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .ws-rest .ws-name{color:var(--t3);}
 .ws-empty .ws-name{color:var(--t3);font-style:italic;opacity:0.7;}
 
+.day-action{font-size:12px;color:var(--t2);font-weight:600;flex-shrink:0;padding:5px 11px;border:1px solid var(--border2);border-radius:6px;cursor:pointer;background:transparent;font-family:inherit;}
+.day-action:hover{border-color:var(--t2);color:var(--text);}
+.day-action.primary{background:var(--accent);color:#0B130E;border-color:var(--accent);}
+.day-action.primary:hover{background:var(--accent-press);}
 .day-action.day-add{font-size:16px;line-height:1;padding:4px 10px;color:var(--accent);border-color:var(--border2);}
 .day-action.day-add:hover{border-color:var(--accent);color:var(--accent);}
 
@@ -699,7 +703,7 @@ function addSession() {
   if (!types.length) return alert('Select at least one type.');
   const session = { id: Date.now(), date, duration: dur, types, notes, calories: cal };
   sessions.unshift(session);
-  sessions.sort((a,b) => b.date.localeCompare(a.date));
+  sessions.sort((a,b) => b.date.localeCompare(a.date) || (b.id - a.id));
   saveLocal();
   pushToSheet('addSession', { session });
   logPrefill = null;
@@ -1180,8 +1184,8 @@ function renderWeekPlan() {
         return `<div class="dc-workout">
           <span class="day-tag dt-${p.type}">${TYPE_NAMES[p.type]||cap(p.type)}</span>
           <span class="dc-name">${esc(p.name)}${ex?` · <span style="color:var(--t3);">${esc(ex)}</span>`:''}</span>
-          <span class="dc-edit" onclick="openPlanEditor('${ds}', ${planArg(p)})" title="Edit">✎</span>
-          <span class="dc-del" onclick="removePlanEntry('${ds}', ${jstr(p.name)}, ${jstr(p.type)})" title="Remove">✕</span>
+          <span class="dc-edit" onclick="openPlanEditorByIndex(${plan.indexOf(p)})" title="Edit">✎</span>
+          <span class="dc-del" onclick="removePlanByIndex(${plan.indexOf(p)})" title="Remove">✕</span>
         </div>`;
       }).join('');
       html += `<div class="day-card ${isToday?'today':''} ${done?'done':''}">
@@ -1204,13 +1208,13 @@ function renderWeekPlan() {
       const hl = isToday && !done;
       planContent = `<span class="day-tag dt-${p.type}">${TYPE_NAMES[p.type]||cap(p.type)}</span>
         <span class="day-detail">${hl?'<b>':''}${esc(p.name)}${hl?'</b>':''}${ex?' · '+esc(ex):''}</span>`;
-      const editBtn = `<button class="day-action" onclick="openPlanEditor('${ds}', ${planArg(p)})">Edit</button>`;
+      const editBtn = `<button class="day-action" onclick="openPlanEditorByIndex(${plan.indexOf(p)})">Edit</button>`;
       const logBtn = (isToday && !done) ? `<button class="day-action primary" onclick="logTodaysPlan()">Log it</button>` : '';
       actions = `<div style="display:flex;gap:5px;flex-shrink:0;">${logBtn}${addBtn}${editBtn}</div>`;
     } else if (isRest) {
       planContent = `<span class="day-tag dt-rest">Rest</span><span class="day-detail">Take it easy</span>`;
       const restP = plans.find(p => p.type === 'rest');
-      const editBtn = `<button class="day-action" onclick="openPlanEditor('${ds}', ${planArg(restP)})">Edit</button>`;
+      const editBtn = `<button class="day-action" onclick="openPlanEditorByIndex(${plan.indexOf(restP)})">Edit</button>`;
       actions = `<div style="display:flex;gap:5px;flex-shrink:0;">${addBtn}${editBtn}</div>`;
     } else {
       planContent = `<span class="day-empty">No plan — tap to add</span>`;
@@ -1226,9 +1230,17 @@ function renderWeekPlan() {
   }
   document.getElementById('week-plan').innerHTML = html;
 }
-// Helpers to safely embed plan data in inline onclick handlers
-function jstr(s) { return JSON.stringify(String(s)); }
-function planArg(p) { return `{name:${jstr(p.name)},type:${jstr(p.type)},exercises:${jstr(p.exercises||'')},duration:${p.duration||0}}`; }
+// Edit / remove a specific workout by its index in the plan array (safe — no string escaping)
+function openPlanEditorByIndex(idx) {
+  const e = plan[idx];
+  if (!e) return;
+  openPlanEditor(e.date, e);
+}
+function removePlanByIndex(idx) {
+  const e = plan[idx];
+  if (!e) return;
+  removePlanEntry(e.date, e.name, e.type);
+}
 
 function renderTemplates() {
   const row = document.getElementById('tmpl-row');
@@ -1321,7 +1333,7 @@ function renderSessionsList() {
   const groups = byWk(sessions);
   const mons = Object.keys(groups).sort((a,b) => b.localeCompare(a)).slice(0,8); // show recent 8 weeks
   el.innerHTML = mons.map(mon => {
-    const ws = groups[mon].sort((a,b) => b.date.localeCompare(a.date));
+    const ws = groups[mon].sort((a,b) => b.date.localeCompare(a.date) || (b.id - a.id));
     return `<div class="week-section">
       <div class="week-sec-hdr">
         <span class="week-sec-title">${weekLabel(mon)}</span>
