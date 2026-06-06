@@ -162,10 +162,23 @@ body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:16
 .ws-rest .ws-name{color:var(--t3);}
 .ws-empty .ws-name{color:var(--t3);font-style:italic;opacity:0.7;}
 
-.day-action{font-size:12px;color:var(--t2);font-weight:600;flex-shrink:0;padding:5px 11px;border:1px solid var(--border2);border-radius:6px;cursor:pointer;background:transparent;font-family:inherit;}
-.day-action:hover{border-color:var(--t2);color:var(--text);}
-.day-action.primary{background:var(--accent);color:#0B130E;border-color:var(--accent);}
-.day-action.primary:hover{background:var(--accent-press);}
+.day-action.day-add{font-size:16px;line-height:1;padding:4px 10px;color:var(--accent);border-color:var(--border2);}
+.day-action.day-add:hover{border-color:var(--accent);color:var(--accent);}
+
+/* Multi-workout day card */
+.day-card{border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:var(--surface);padding:11px 14px;width:100%;overflow:hidden;}
+.day-card.today{border-color:var(--accent);background:rgba(174,230,59,0.06);}
+.day-card.done{background:var(--surface2);}
+.dc-head{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+.dc-day{font-size:13px;font-weight:700;color:var(--t2);flex:1;min-width:0;}
+.day-card.today .dc-day{color:var(--accent);}
+.dc-workout{display:flex;align-items:center;gap:8px;padding:7px 0 7px 30px;min-width:0;}
+.dc-workout + .dc-workout{border-top:1px solid var(--border);}
+.dc-name{flex:1;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.dc-edit,.dc-del{flex-shrink:0;cursor:pointer;font-size:14px;color:var(--t3);padding:2px 5px;border-radius:4px;}
+.dc-edit:hover{color:var(--text);}
+.dc-del:hover{color:var(--danger);}
+.dc-add{padding:8px 0 2px 30px;font-size:13px;color:var(--accent);font-weight:600;cursor:pointer;}
 
 /* Templates */
 .tmpl-row{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin:0 -36px;padding-left:36px;padding-right:36px;scroll-padding-left:36px;}
@@ -495,6 +508,7 @@ let editTypes = new Set();
 let editingTmplId = null;
 let editingTmplType = null;
 let editingPlanDate = null;
+let editingPlanEntry = null;
 let cpType = null;
 let syncState = 'offline';
 let pendingOps = 0;
@@ -645,6 +659,7 @@ function calcStreak() {
 }
 
 function getPlanFor(date) { return plan.find(p => p.date === date); }
+function getPlansFor(date) { return plan.filter(p => p.date === date); }
 function hasSessionOn(date) { return sessions.some(s => s.date === date); }
 function lastWorkout() {
   if (!sessions.length) return null;
@@ -782,13 +797,23 @@ function deleteTemplateNow() {
 }
 
 // ── Plan CRUD ────────────────────────────────────────────────────────────────
-function openPlanEditor(date) {
+function openPlanEditor(date, entry) {
+  // entry = null  → add a new workout to the day
+  // entry = {name,type,...} → editing that specific workout
   editingPlanDate = date;
-  const existing = getPlanFor(date);
+  editingPlanEntry = entry || null;
   const d = new Date(date + 'T00:00:00');
+  const dayStr = d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('plan-modal-title').textContent =
-    `Plan for ${d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}`;
-  document.getElementById('plan-clear-btn').style.display = existing ? 'inline-flex' : 'none';
+    editingPlanEntry ? `Edit workout — ${dayStr}` : `Add a workout — ${dayStr}`;
+  // "Remove this workout" only when editing an existing entry
+  const clearBtn = document.getElementById('plan-clear-btn');
+  if (editingPlanEntry) {
+    clearBtn.style.display = 'inline-flex';
+    clearBtn.textContent = 'Remove this workout';
+  } else {
+    clearBtn.style.display = 'none';
+  }
   renderPickerGrid();
   openModal('plan-modal');
 }
@@ -810,21 +835,28 @@ function setPlanFromTemplate(tid) {
   const t = templates.find(t => t.id === tid);
   if (!t) return;
   const p = { date: editingPlanDate, name: t.name, type: t.type, exercises: t.exercises, duration: t.duration || 0 };
-  upsertPlan(p);
+  savePlanEntry(p);
   closeModal('plan-modal');
 }
 function setPlanRest() {
+  // Rest replaces the whole day (a rest day has no workouts)
+  clearDayPlans(editingPlanDate);
   const p = { date: editingPlanDate, name: 'Rest day', type: 'rest', exercises: '', duration: 0 };
-  upsertPlan(p);
+  plan.push(p);
+  saveLocal();
+  pushToSheet('addPlan', { plan: p });
+  renderWorkouts();
+  renderDashboard();
   closeModal('plan-modal');
 }
 function openCustomPlan() {
   closeModal('plan-modal');
-  document.getElementById('cp-name').value = '';
-  document.getElementById('cp-duration').value = '';
-  document.getElementById('cp-exercises').value = '';
-  cpType = null;
-  document.querySelectorAll('#cp-type-pills .pill').forEach(p => p.className = 'pill');
+  document.getElementById('cp-name').value = editingPlanEntry ? editingPlanEntry.name : '';
+  document.getElementById('cp-duration').value = editingPlanEntry ? (editingPlanEntry.duration || '') : '';
+  document.getElementById('cp-exercises').value = editingPlanEntry ? (editingPlanEntry.exercises || '') : '';
+  cpType = editingPlanEntry ? editingPlanEntry.type : null;
+  document.querySelectorAll('#cp-type-pills .pill').forEach(p =>
+    p.className = (cpType && p.dataset.type === cpType) ? `pill sel-${cpType}` : 'pill');
   openModal('custom-plan-modal');
 }
 function pickCpType(el) {
@@ -840,23 +872,48 @@ function saveCustomPlan() {
   if (!name) return alert("Give it a name.");
   if (!cpType) return alert('Pick a type.');
   const p = { date: editingPlanDate, name, type: cpType, exercises: ex, duration: dur };
-  upsertPlan(p);
+  savePlanEntry(p);
   closeModal('custom-plan-modal');
 }
-function upsertPlan(p) {
-  const i = plan.findIndex(x => x.date === p.date);
-  if (i >= 0) plan[i] = p; else plan.push(p);
+// Add a new entry, or update the one being edited
+function savePlanEntry(p) {
+  if (editingPlanEntry) {
+    const old = { date: editingPlanDate, name: editingPlanEntry.name, type: editingPlanEntry.type };
+    const i = plan.findIndex(x => x.date === old.date && x.name === old.name && x.type === old.type);
+    if (i >= 0) plan[i] = p; else plan.push(p);
+    pushToSheet('updatePlan', { old, plan: p });
+  } else {
+    plan.push(p);
+    pushToSheet('addPlan', { plan: p });
+  }
   saveLocal();
-  pushToSheet('setPlan', { plan: p });
   renderWorkouts();
   renderDashboard();
 }
+function clearDayPlans(date) {
+  plan = plan.filter(p => p.date !== date);
+}
+// "Remove this workout" (edit mode) — deletes just that entry
 function clearPlanNow() {
   if (!editingPlanDate) return;
-  plan = plan.filter(p => p.date !== editingPlanDate);
+  if (editingPlanEntry) {
+    const old = { date: editingPlanDate, name: editingPlanEntry.name, type: editingPlanEntry.type };
+    plan = plan.filter(p => !(p.date === old.date && p.name === old.name && p.type === old.type));
+    pushToSheet('deletePlan', { old });
+  } else {
+    plan = plan.filter(p => p.date !== editingPlanDate);
+    pushToSheet('clearPlan', { date: editingPlanDate });
+  }
   saveLocal();
-  pushToSheet('clearPlan', { date: editingPlanDate });
   closeModal('plan-modal');
+  renderWorkouts();
+  renderDashboard();
+}
+function removePlanEntry(date, name, type) {
+  const old = { date, name, type };
+  plan = plan.filter(p => !(p.date === date && p.name === name && p.type === type));
+  saveLocal();
+  pushToSheet('deletePlan', { old });
   renderWorkouts();
   renderDashboard();
 }
@@ -867,7 +924,7 @@ function clearWeekPlan() {
   const dates = [];
   for (let i = 0; i < 7; i++) dates.push(ldStr(new Date(y,m-1,d+i)));
   dates.forEach(date => {
-    if (getPlanFor(date)) pushToSheet('clearPlan', { date });
+    if (getPlansFor(date).length) pushToSheet('clearPlan', { date });
   });
   plan = plan.filter(p => !dates.includes(p.date));
   saveLocal();
@@ -905,8 +962,8 @@ function renderDashboard() {
   for (let i = 0; i < 7; i++) {
     const dt = new Date(ry,rm-1,rd+i), ds = ldStr(dt);
     if (hasSessionOn(ds)) daysDone++;
-    const pl = getPlanFor(ds);
-    if (pl && pl.type !== 'rest') goalDays++;
+    const pl = getPlansFor(ds);
+    if (pl.some(x => x.type !== 'rest')) goalDays++;
     const dayCals = sessions.filter(s => s.date === ds).reduce((a,s)=>a+(s.calories||0),0);
     calsByDay.push({ cals: dayCals, isToday: ds === today() });
   }
@@ -1003,24 +1060,27 @@ function renderDashboard() {
   let wHtml = `<div class="sec-lbl"><span>This week — ${weekLabel(thisMon)}</span></div>`;
   for (let i = 0; i < 7; i++) {
     const dt = new Date(wy,wm-1,wd+i), ds = ldStr(dt);
-    const hit = hasSessionOn(ds), isT = ds === tdy;
-    const p = getPlanFor(ds);
-    const isRest = p && p.type === 'rest';
+    const isT = ds === tdy;
+    const dayPlans = getPlansFor(ds);
+    const workouts = dayPlans.filter(p => p.type !== 'rest');
+    const isRest = dayPlans.some(p => p.type === 'rest') && !workouts.length;
+    const daySessions = sessions.filter(s => s.date === ds);
+    const hit = daySessions.length > 0;
 
     let name = '', cls = '';
-    if (isRest) {
-      name = 'Rest'; cls = 'ws-rest';
-    } else if (p) {
-      name = p.name; cls = hit ? 'ws-done' : (isT ? 'ws-today' : '');
+    if (workouts.length) {
+      name = workouts.map(p => p.name).join(', ');
+      cls = hit ? 'ws-done' : (isT ? 'ws-today' : '');
     } else if (hit) {
-      const sesh = sessions.find(s => s.date === ds);
-      name = sesh && sesh.types[0] ? (TYPE_NAMES[sesh.types[0]] || 'Workout') : 'Workout';
+      name = daySessions.map(s => TYPE_NAMES[s.types[0]] || 'Workout').join(', ');
       cls = 'ws-done';
+    } else if (isRest) {
+      name = 'Rest'; cls = 'ws-rest';
     } else {
       name = 'No plan'; cls = 'ws-empty';
     }
 
-    const mark = hit ? '✓' : (isT && !isRest ? '●' : '');
+    const mark = hit ? '✓' : (isT && workouts.length ? '●' : '');
     wHtml += `<div class="ws-row ${cls}">
       <span class="ws-mark">${mark}</span>
       <span class="ws-day">${wkLabels[i]} ${dt.getDate()}</span>
@@ -1097,53 +1157,78 @@ function renderWeekPlan() {
   for (let i = 0; i < 7; i++) {
     const dt = new Date(y,m-1,d+i), ds = ldStr(dt);
     const isToday = ds === t;
-    const isPast  = ds < t;
     const done    = hasSessionOn(ds);
-    const p       = getPlanFor(ds);
     const dayLabel = `${labels[i]} ${dt.getDate()}`;
+    const plans   = getPlansFor(ds);
+    const workouts = plans.filter(p => p.type !== 'rest');
+    const isRest  = plans.some(p => p.type === 'rest') && !workouts.length;
 
-    let statusClass, statusContent = '';
+    // Status dot
+    let statusClass = 's-none', statusContent = '';
     if (done) { statusClass = 's-done'; statusContent = '✓'; }
-    else if (isToday && p && p.type !== 'rest') { statusClass = 's-today'; statusContent = '!'; }
-    else if (p && p.type === 'rest') { statusClass = 's-plan'; }
-    else if (p) { statusClass = 's-plan'; }
-    else { statusClass = 's-none'; }
+    else if (isToday && workouts.length) { statusClass = 's-today'; statusContent = '!'; }
+    else if (plans.length) { statusClass = 's-plan'; }
 
-    let planContent = '';
-    if (p) {
-      const exercises = p.exercises ? p.exercises.split('\n').filter(Boolean).join(', ') : '';
-      const todayHighlight = isToday && !done;
-      if (p.type === 'rest') {
-        planContent = `<span class="day-tag dt-rest">Rest</span><span class="day-detail">Take it easy</span>`;
-      } else {
-        planContent = `<span class="day-tag dt-${p.type}">${TYPE_NAMES[p.type]||cap(p.type)}</span>
-          <span class="day-detail">${todayHighlight?'<b>':''}${esc(p.name)}${todayHighlight?'</b>':''}${exercises?' · '+esc(exercises):''}</span>`;
-      }
-    } else {
-      planContent = `<span class="day-empty">No plan — tap to add</span>`;
+    const addBtn = `<button class="day-action day-add" onclick="openPlanEditor('${ds}', null)" title="Add a workout">+</button>`;
+
+    // ── Multiple workouts → expanding card ──
+    if (workouts.length >= 2) {
+      const logBtn = (isToday && !done)
+        ? `<button class="day-action primary" onclick="logTodaysPlan()">Log it</button>` : '';
+      const rows = workouts.map(p => {
+        const ex = p.exercises ? p.exercises.split('\n').filter(Boolean).join(', ') : '';
+        return `<div class="dc-workout">
+          <span class="day-tag dt-${p.type}">${TYPE_NAMES[p.type]||cap(p.type)}</span>
+          <span class="dc-name">${esc(p.name)}${ex?` · <span style="color:var(--t3);">${esc(ex)}</span>`:''}</span>
+          <span class="dc-edit" onclick="openPlanEditor('${ds}', ${planArg(p)})" title="Edit">✎</span>
+          <span class="dc-del" onclick="removePlanEntry('${ds}', ${jstr(p.name)}, ${jstr(p.type)})" title="Remove">✕</span>
+        </div>`;
+      }).join('');
+      html += `<div class="day-card ${isToday?'today':''} ${done?'done':''}">
+        <div class="dc-head">
+          <div class="day-status ${statusClass}">${statusContent}</div>
+          <span class="dc-day">${dayLabel}${isToday?' · Today':''}</span>
+          ${logBtn}
+        </div>
+        ${rows}
+        <div class="dc-add" onclick="openPlanEditor('${ds}', null)">+ Add another workout</div>
+      </div>`;
+      continue;
     }
 
-    let action;
-    if (isToday && p && !done && p.type !== 'rest') {
-      action = `<div style="display:flex;gap:5px;flex-shrink:0;">
-        <button class="day-action primary" onclick="logTodaysPlan()">Log it</button>
-        <button class="day-action" onclick="openPlanEditor('${ds}')">Edit</button>
-      </div>`;
-    } else if (p) {
-      action = `<button class="day-action" onclick="openPlanEditor('${ds}')">Edit</button>`;
+    // ── Single workout / rest / empty → simple row ──
+    let planContent, actions;
+    if (workouts.length === 1) {
+      const p = workouts[0];
+      const ex = p.exercises ? p.exercises.split('\n').filter(Boolean).join(', ') : '';
+      const hl = isToday && !done;
+      planContent = `<span class="day-tag dt-${p.type}">${TYPE_NAMES[p.type]||cap(p.type)}</span>
+        <span class="day-detail">${hl?'<b>':''}${esc(p.name)}${hl?'</b>':''}${ex?' · '+esc(ex):''}</span>`;
+      const editBtn = `<button class="day-action" onclick="openPlanEditor('${ds}', ${planArg(p)})">Edit</button>`;
+      const logBtn = (isToday && !done) ? `<button class="day-action primary" onclick="logTodaysPlan()">Log it</button>` : '';
+      actions = `<div style="display:flex;gap:5px;flex-shrink:0;">${logBtn}${addBtn}${editBtn}</div>`;
+    } else if (isRest) {
+      planContent = `<span class="day-tag dt-rest">Rest</span><span class="day-detail">Take it easy</span>`;
+      const restP = plans.find(p => p.type === 'rest');
+      const editBtn = `<button class="day-action" onclick="openPlanEditor('${ds}', ${planArg(restP)})">Edit</button>`;
+      actions = `<div style="display:flex;gap:5px;flex-shrink:0;">${addBtn}${editBtn}</div>`;
     } else {
-      action = `<button class="day-action" onclick="openPlanEditor('${ds}')">+ Add</button>`;
+      planContent = `<span class="day-empty">No plan — tap to add</span>`;
+      actions = `<button class="day-action" onclick="openPlanEditor('${ds}', null)">+ Add</button>`;
     }
 
     html += `<div class="day-row ${isToday?'today':''} ${done?'done':''}">
       <div class="day-status ${statusClass}">${statusContent}</div>
       <span class="day-name">${dayLabel}</span>
       <div class="day-plan">${planContent}</div>
-      ${action}
+      ${actions}
     </div>`;
   }
   document.getElementById('week-plan').innerHTML = html;
 }
+// Helpers to safely embed plan data in inline onclick handlers
+function jstr(s) { return JSON.stringify(String(s)); }
+function planArg(p) { return `{name:${jstr(p.name)},type:${jstr(p.type)},exercises:${jstr(p.exercises||'')},duration:${p.duration||0}}`; }
 
 function renderTemplates() {
   const row = document.getElementById('tmpl-row');
